@@ -316,7 +316,6 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
         }
     }
 
-    $adminPct = (float) $store['default_admin_fee_percent'];
     $created = 0; $updated = 0; $unchanged = 0; $failed = 0;
     $nDrop = 0; $nSelf = 0; $partnerTotal = 0.0; $unmatched = []; $selfNoHpp = 0; $selfNoSku = 0; $qtyAssumedN = 0;
     $pdo = db();
@@ -385,14 +384,10 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
 
         $revenue = (float) $o['productRevenue'];
         $verified = !empty($o['_hasIncome']) ? 1 : 0;
-        // Untuk pesanan ber-Income, pakai biaya admin apa adanya (boleh 0) — biaya
-        // sudah direkonsiliasi agar laba = Total Penghasilan; mengganti dgn estimasi
-        // persen akan merusak rekonsiliasi. Estimasi hanya untuk pesanan non-Income.
-        if ($verified) {
-            $adminFee = (float) ($o['adminFee'] ?? 0);
-        } else {
-            $adminFee = ($o['adminFee'] ?? 0) > 0 ? (float) $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
-        }
+        // Biaya admin SELALU dari data (Laporan Penghasilan). Tidak ditebak pakai
+        // persen. Bila Laporan Penghasilan belum diimpor -> 0 (laba belum final,
+        // ditandai di daftar), dan akan terisi otomatis saat laporan diimpor.
+        $adminFee = (float) ($o['adminFee'] ?? 0);
         $status = mp_map_status($o['status'] ?? '');
         // Pesanan DIBATALKAN (tak jadi dikirim) = tak ada uang → laba 0, bukan minus.
         // (Retur tetap pakai nilai riil dari Income, bisa 0 atau minus sesuai fakta.)

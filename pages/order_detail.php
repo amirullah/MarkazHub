@@ -124,9 +124,9 @@ page_header('Pesanan ' . $order['external_no'],
     <div class="card pad sticky">
       <h3 class="card-title">Ringkasan Laba</h3>
       <?php if (!empty($order['income_verified'])): ?>
-        <div class="net-note net-ok-bg">✓ Laba dihitung dari <strong>Total Penghasilan</strong> Shopee — uang bersih riil setelah semua potongan marketplace.</div>
+        <div class="net-note net-ok-bg">✓ Laba <strong>final</strong> dari <strong>Laporan Penghasilan</strong> — uang bersih riil setelah semua potongan marketplace.</div>
       <?php else: ?>
-        <div class="net-note net-est-bg">≈ <strong>Estimasi.</strong> Biaya admin memakai persentase toko (Laporan Penghasilan belum diimpor untuk pesanan ini), jadi laba belum tentu uang bersih riil.</div>
+        <div class="net-note net-est-bg">≈ <strong>Belum final.</strong> Biaya potongan marketplace (admin/komisi/layanan) belum ada karena <strong>Laporan Penghasilan</strong> pesanan ini belum diimpor — laba di bawah masih terlalu tinggi. Impor Laporan Penghasilan agar final.</div>
       <?php endif; ?>
       <div class="sum-row"><span class="muted">Pendapatan</span><span id="sum-rev">-</span></div>
       <div class="sum-row"><span class="muted">Total Biaya</span><span id="sum-cost" class="neg">-</span></div>

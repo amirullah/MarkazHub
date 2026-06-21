@@ -152,8 +152,8 @@ $presets = [
           <td><a class="link" href="<?= e(url('order_detail', ['id' => $o['id']])) ?>"><?= e($o['external_no']) ?></a>
             <div class="muted tiny"><?= (int)$o['item_count'] ?> item ·
               <?= !empty($o['income_verified'])
-                ? '<span class="net-tag net-ok" title="Laba dari uang bersih marketplace">✓ bersih</span>'
-                : '<span class="net-tag net-est" title="Laba estimasi (belum ada Laporan Penghasilan)">≈ estimasi</span>' ?>
+                ? '<span class="net-tag net-ok" title="Laba final dari Laporan Penghasilan (uang bersih riil)">✓ bersih</span>'
+                : '<span class="net-tag net-est" title="Laba belum final — biaya marketplace belum ada (impor Laporan Penghasilan)">≈ belum final</span>' ?>
             </div>
             <?php if ($needsFile): ?><div class="tiny"><span class="net-tag tag-need" title="Impor file <?= e($fileLbl) ?> periode ini">📥 belum ada <?= e($fileLbl) ?></span></div><?php endif; ?>
           </td>

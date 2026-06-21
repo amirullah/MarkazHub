@@ -12,13 +12,12 @@ page_header('Toko', 'Daftar toko di tiap marketplace. Satu marketplace boleh pun
     <?php else: ?>
       <div class="card table-wrap">
         <table>
-          <thead><tr><th>Toko</th><th>Marketplace</th><th class="right">Admin %</th><th class="right">Pesanan</th><th></th></tr></thead>
+          <thead><tr><th>Toko</th><th>Channel</th><th class="right">Pesanan</th><th></th></tr></thead>
           <tbody>
           <?php foreach ($stores as $s): ?>
             <tr<?= $editId === (int)$s['id'] ? ' class="row-editing"' : '' ?>>
               <td class="bold"><?= e($s['name']) ?><?= !$s['active'] ? ' <span class="muted tiny">(nonaktif)</span>' : '' ?></td>
               <td><?= badge_channel($s['marketplace']) ?></td>
-              <td class="right"><?= persen($s['default_admin_fee_percent']) ?></td>
               <td class="right"><?= (int)$s['order_count'] ?></td>
               <td class="right nowrap">
                 <a class="link" href="<?= e(url('stores', ['edit' => $s['id']])) ?>">Edit</a>
@@ -54,10 +53,6 @@ page_header('Toko', 'Daftar toko di tiap marketplace. Satu marketplace boleh pun
           <option value="<?= $val ?>" <?= $editChan === $val ? 'selected' : '' ?>><?= e($lbl) ?></option>
         <?php endforeach; ?>
       </select>
-    </div>
-    <div class="field"><label class="label">Biaya Admin Default (%)</label>
-      <input type="number" step="0.1" min="0" name="default_admin_fee_percent" class="input" placeholder="6.5" value="<?= $edit ? e((float)$edit['default_admin_fee_percent']) : '' ?>">
-      <p class="hint">Untuk estimasi biaya admin saat file import tidak memuat rincian biaya.</p>
     </div>
     <div class="field"><label class="label">Catatan (opsional)</label><input name="note" class="input" value="<?= e($edit['note'] ?? '') ?>"></div>
     <?php if ($edit): ?>
