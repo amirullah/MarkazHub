@@ -171,3 +171,7 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 .net-note { font-size: .78rem; line-height: 1.35; padding: .55rem .65rem; border-radius: .5rem; margin-bottom: .75rem; }
 .net-ok-bg { color: #065f46; background: #ecfdf5; border: 1px solid #a7f3d0; }
 .net-est-bg { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; }
+
+/* ---- Grup slot upload per marketplace ---- */
+.upload-group { margin-top: .9rem; }
+.upload-group-head { font-weight: 700; font-size: .82rem; color: var(--slate-700); margin-bottom: .4rem; padding-bottom: .25rem; border-bottom: 1px solid var(--slate-200); }

@@ -70,7 +70,18 @@ const MP_COLUMNS = [
     'productName' => ['product_name', 'nama produk', 'product name'],
     'variation'  => ['nama variasi', 'variation name', 'variasi'],
     'qty'        => ['qty', 'quantity', 'jumlah', 'kuantitas'],
-    'unitPrice'  => ['unit_price', 'harga setelah diskon', 'harga satuan', 'harga awal', 'original price', 'harga jual'],
+    'unitPrice'  => ['unit_price', 'harga setelah diskon', 'sku unit original price', 'harga satuan', 'harga awal', 'original price', 'harga jual'],
+];
+
+// Kolom Laporan Penghasilan Tokopedia/TikTok (Seller Center gabungan),
+// sheet "Detail pesanan". Biaya bertanda negatif; uang bersih = penyelesaian.
+const MP_TIKTOK_INCOME = [
+    'externalNo'  => ['id pesanan/penyesuaian', 'order id', 'id pesanan'],
+    'txType'      => ['jenis transaksi'],
+    'orderDate'   => ['waktu pemesanan', 'waktu pembayaran pesanan'],
+    'revenue'     => ['total pendapatan'],
+    'net'         => ['jumlah penyelesaian pembayaran', 'jumlah penyelesaian pesanan'],
+    'totalFees'   => ['total biaya'],
 ];
 
 // Kolom khusus Laporan Penghasilan Shopee (sheet "Income"). Biaya bertanda
@@ -394,6 +405,43 @@ function mp_sellerfee_items(array $rows): array
     return $byOrder;
 }
 
+// ---------- Adapter: Laporan Penghasilan Tokopedia/TikTok (sheet Detail pesanan) ----------
+// Satu baris = satu pesanan (tanpa item). Omzet = "Total Pendapatan", uang bersih
+// = "Jumlah penyelesaian pembayaran"; biaya dilebur ke admin + direkonsiliasi agar
+// laba (sebelum modal) persis = penyelesaian. Item (SKU/qty) menyusul dari CSV
+// "Selesai pesanan".
+function mp_tiktok_income_to_orders(array $assoc): array
+{
+    $C = MP_TIKTOK_INCOME;
+    $orders = [];
+    foreach ($assoc as $r) {
+        $type = mp_pick($r, $C['txType']);
+        if ($type !== null && stripos($type, 'pesanan') === false) continue; // lewati Penyesuaian
+        $no = mp_pick($r, $C['externalNo']);
+        if (!$no) continue;
+        $revenue = mp_num(mp_pick($r, $C['revenue']));
+        $net = mp_num(mp_pick($r, $C['net']));
+        $admin = abs(mp_num(mp_pick($r, $C['totalFees'])));
+        $other = ($revenue - $net) - $admin; // rekonsiliasi
+        $orders[$no] = [
+            'externalNo' => $no,
+            'orderDate'  => mp_pick($r, $C['orderDate']),
+            'status'     => 'COMPLETED',
+            'buyerName'  => null,
+            'shippingChargedToBuyer' => 0.0,
+            'adminFee'   => $admin,
+            'shippingCostSeller' => 0.0,
+            'voucherSellerBorne' => 0.0,
+            'otherIncome' => 0.0,
+            'otherCost'  => $other,
+            'productRevenue' => $revenue,
+            'items'      => [],
+            '_hasIncome' => true,
+        ];
+    }
+    return array_values($orders);
+}
+
 // ---------- Dispatcher: baca satu file -> {type, payload} ----------
 // type: 'jakmall' | 'orders' (ternormalisasi siap merge) | 'unknown'
 function mp_read_file(string $path, string $origName = ''): array
@@ -449,6 +497,14 @@ function mp_read_file(string $path, string $origName = ''): array
         $hi = mp_header_index($rows, ['no. pesanan', 'nomor referensi sku'], 5);
         if ($hi >= 0) {
             return ['type' => 'orders', 'orders' => mp_rows_to_orders(mp_assoc_rows($rows, $hi)), 'source' => 'shopee_order'];
+        }
+    }
+
+    // 4) Laporan Penghasilan Tokopedia/TikTok (sheet "Detail pesanan")?
+    foreach ($sheets as $rows) {
+        $hi = mp_header_index($rows, ['id pesanan/penyesuaian', 'total pendapatan'], 5);
+        if ($hi >= 0) {
+            return ['type' => 'orders', 'orders' => mp_tiktok_income_to_orders(mp_assoc_rows($rows, $hi)), 'source' => 'tiktok_income'];
         }
     }
 

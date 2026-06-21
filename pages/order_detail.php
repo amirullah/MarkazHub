@@ -38,7 +38,8 @@ page_header('Pesanan ' . $order['external_no'],
     <?php if (count($items) === 0): ?>
       <tr><td colspan="6" class="muted" style="padding:1rem;text-align:center">
         Rincian produk belum tersedia — pesanan ini baru punya <strong>Laporan Penghasilan</strong>
-        (tanpa nama/SKU/qty produk). Impor file <strong>Order Completed</strong> periode yang sama
+        (tanpa nama/SKU/qty produk). Impor file pesanan periode yang sama
+        (<strong>Order Completed</strong> Shopee / <strong>Pesanan Selesai</strong> Tokopedia·TikTok)
         agar produk, SKU, qty &amp; <strong>HPP</strong> terisi otomatis.
       </td></tr>
     <?php else: foreach ($items as $it): ?>

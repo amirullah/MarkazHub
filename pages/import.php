@@ -1,18 +1,23 @@
 <?php
 $stores = q('SELECT id, name, marketplace FROM stores WHERE active = 1 ORDER BY name');
 page_header('Import Laporan',
-    'Unggah langsung file ekspor dari Shopee & Jakmall (.xlsx) — tanpa template khusus. Tiap jenis file punya slot sendiri; sistem mengenali isinya otomatis.');
+    'Unggah langsung file ekspor dari Shopee / Tokopedia / TikTok & Jakmall — tanpa template khusus. Sistem mengenali jenis tiap file otomatis.');
 
-// Definisi slot upload (label memandu; deteksi tetap berdasarkan isi file).
-$slots = [
-    ['key' => 'income', 'icon' => '📊', 'title' => 'Laporan Penghasilan Shopee',
-        'desc' => 'Biaya admin/komisi/layanan riil + laba bersih per pesanan.'],
-    ['key' => 'order', 'icon' => '📦', 'title' => 'Order Completed Shopee',
-        'desc' => 'Daftar item, SKU penjual & jumlah (dihubungkan via No. Pesanan).'],
-    ['key' => 'jakorder', 'icon' => '🚚', 'title' => 'Laporan Pesanan Jakmall',
-        'desc' => 'Deteksi pesanan dropship + biaya mitra Jakmall. Tanpa file ini, pemenuhan pakai pilihan di bawah.'],
-    ['key' => 'master', 'icon' => '🏷️', 'title' => 'Master Produk Jakmall',
-        'desc' => 'Modal/HPP per SKU; mengisi katalog Produk & HPP otomatis.'],
+// Slot dikelompokkan per sumber agar jelas. Deteksi tetap berdasarkan ISI file,
+// jadi slot hanya panduan; semua dikirim sebagai files[].
+$groups = [
+    ['title' => '📦 File Shopee', 'note' => 'untuk toko Shopee', 'slots' => [
+        ['Laporan Penghasilan Shopee', '.xlsx', 'Biaya admin/komisi/layanan riil + laba bersih per pesanan.'],
+        ['Order Completed Shopee', '.xlsx', 'Daftar item: SKU penjual &amp; jumlah (dihubungkan via No. Pesanan).'],
+    ]],
+    ['title' => '🛒 File Tokopedia / TikTok', 'note' => 'untuk toko Tokopedia/TikTok', 'slots' => [
+        ['Laporan Penghasilan Tokopedia/TikTok', '.xlsx', 'Settlement: Total Pendapatan, Total Biaya &amp; uang bersih per pesanan.'],
+        ['Pesanan Selesai Tokopedia/TikTok', '.csv', 'Daftar item: Seller SKU &amp; jumlah per pesanan.'],
+    ]],
+    ['title' => '🚚 File Jakmall', 'note' => 'untuk semua toko', 'slots' => [
+        ['Master Produk Jakmall', '.xlsx', 'Modal/HPP per SKU + ID produk marketplace; isi katalog otomatis.'],
+        ['Laporan Pesanan Jakmall', '.xlsx', 'Deteksi pesanan dropship + biaya mitra Jakmall.'],
+    ]],
 ];
 ?>
 <div class="two-col">
@@ -31,23 +36,26 @@ $slots = [
               <option value="<?= $s['id'] ?>"><?= e($s['name']) ?> · <?= e(MARKETPLACE_LABEL[$s['marketplace']]) ?></option>
             <?php endforeach; ?>
           </select>
+          <p class="hint">Pilih toko sesuai marketplace file pesanan yang Anda unggah.</p>
         </div>
 
-        <label class="label">File untuk diunggah</label>
-        <div class="upload-slots">
-          <?php foreach ($slots as $sl): ?>
-            <label class="upload-slot" for="f_<?= $sl['key'] ?>">
-              <div class="upload-ic"><?= $sl['icon'] ?></div>
-              <div class="upload-body">
-                <div class="upload-title"><?= e($sl['title']) ?> <span class="muted">(.xlsx)</span></div>
-                <div class="upload-desc"><?= e($sl['desc']) ?></div>
-                <div class="file-status muted" data-status>Belum dipilih</div>
-              </div>
-              <input type="file" id="f_<?= $sl['key'] ?>" name="files[]" accept=".xlsx,.csv"
-                     class="js-file" data-label="<?= e($sl['title']) ?>" hidden>
-            </label>
-          <?php endforeach; ?>
-        </div>
+        <?php foreach ($groups as $g): ?>
+          <div class="upload-group">
+            <div class="upload-group-head"><?= $g['title'] ?> <span class="muted">· <?= e($g['note']) ?></span></div>
+            <div class="upload-slots">
+              <?php foreach ($g['slots'] as $sl): ?>
+                <label class="upload-slot">
+                  <div class="upload-body">
+                    <div class="upload-title"><?= e($sl[0]) ?> <span class="muted">(<?= e($sl[1]) ?>)</span></div>
+                    <div class="upload-desc"><?= $sl[2] ?></div>
+                    <div class="file-status muted" data-status>Belum dipilih</div>
+                  </div>
+                  <input type="file" name="files[]" accept=".xlsx,.csv" class="js-file" hidden>
+                </label>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        <?php endforeach; ?>
 
         <div class="field" style="margin-top:14px">
           <label class="label">Jika Laporan Pesanan Jakmall TIDAK diunggah, anggap pemenuhan sebagai:</label>
@@ -68,13 +76,11 @@ $slots = [
             var st = slot.querySelector('[data-status]');
             if (inp.files && inp.files.length) {
               st.textContent = '✓ ' + inp.files[0].name;
-              st.classList.remove('muted');
-              st.classList.add('file-ok');
+              st.classList.remove('muted'); st.classList.add('file-ok');
               slot.classList.add('is-selected');
             } else {
               st.textContent = 'Belum dipilih';
-              st.classList.add('muted');
-              st.classList.remove('file-ok');
+              st.classList.add('muted'); st.classList.remove('file-ok');
               slot.classList.remove('is-selected');
             }
           });
@@ -86,12 +92,11 @@ $slots = [
   <div class="card pad">
     <h2 class="card-title">Cara pakai</h2>
     <ol class="steps">
-      <li>Pertama kali / saat harga berubah: unggah <strong>Master Produk Jakmall</strong> untuk modal per SKU.</li>
-      <li>Tiap periode: unggah <strong>Laporan Penghasilan</strong> + <strong>Order Completed</strong> Shopee untuk <strong>periode yang sama</strong>.</li>
-      <li>Sertakan <strong>Laporan Pesanan Jakmall</strong> agar sistem otomatis menandai pesanan <em>dropship</em> beserta biaya mitranya.</li>
+      <li>Sekali / saat harga berubah: unggah <strong>Master Produk Jakmall</strong> (modal per SKU).</li>
+      <li>Pilih <strong>toko tujuan</strong>, lalu unggah file <strong>Laporan Penghasilan</strong> + <strong>file Pesanan</strong> (Order Completed / Pesanan Selesai) untuk <strong>periode yang sama</strong>.</li>
+      <li>Sertakan <strong>Laporan Pesanan Jakmall</strong> agar pesanan dropship + biaya mitranya tertandai otomatis.</li>
     </ol>
-    <p class="hint">Bisa unggah beberapa slot sekaligus dalam satu kali Import. Setelah Import, pesan hasil akan merinci file apa saja yang terbaca & jumlahnya.</p>
-    <p class="hint">Import ulang file yang sama tidak menggandakan data — pesanan dengan nomor yang sudah ada akan dilewati.</p>
+    <p class="hint">Boleh unggah beberapa file sekaligus. Setelah Import, pesan hasil merinci file apa saja yang terbaca &amp; jumlahnya. Import ulang tidak menggandakan data — pesanan lama justru dilengkapi.</p>
     <a class="btn btn-secondary full" href="templates/contoh-pesanan.csv" download>⬇️ Template CSV (opsional)</a>
   </div>
 </div>
