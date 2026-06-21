@@ -35,7 +35,13 @@ page_header('Pesanan ' . $order['external_no'],
   <table>
     <thead><tr><th>Produk</th><th>SKU</th><th class="right">Qty</th><th class="right">Harga</th><th class="right">HPP</th><th class="right">Subtotal</th></tr></thead>
     <tbody>
-    <?php foreach ($items as $it): ?>
+    <?php if (count($items) === 0): ?>
+      <tr><td colspan="6" class="muted" style="padding:1rem;text-align:center">
+        Rincian produk belum tersedia — pesanan ini baru punya <strong>Laporan Penghasilan</strong>
+        (tanpa nama/SKU/qty produk). Impor file <strong>Order Completed</strong> periode yang sama
+        agar produk, SKU, qty &amp; <strong>HPP</strong> terisi otomatis.
+      </td></tr>
+    <?php else: foreach ($items as $it): ?>
       <tr>
         <td class="bold"><?= e($it['name']) ?></td>
         <td class="muted mono tiny"><?= e($it['sku'] ?: '—') ?><?= ($it['sku'] && !$it['product_id']) ? ' <span title="SKU belum di katalog">⚠️</span>' : '' ?></td>
@@ -44,10 +50,17 @@ page_header('Pesanan ' . $order['external_no'],
         <td class="right"><?= rupiah($it['unit_cost']) ?></td>
         <td class="right bold"><?= rupiah($it['unit_price'] * $it['qty']) ?></td>
       </tr>
-    <?php endforeach; ?>
+    <?php endforeach; endif; ?>
     </tbody>
   </table>
 </div>
+<?php if (count($items) > 0 && $order['fulfillment'] === 'SELF' && (float)$order['cogs'] == 0): ?>
+  <p class="net-note net-est-bg" style="margin-top:-1rem;margin-bottom:1.5rem">
+    HPP masih Rp0 untuk pesanan packing-sendiri ini. Pastikan <strong>SKU</strong> produk
+    terbaca (impor <strong>Order Completed</strong>) dan harganya ada di katalog
+    (impor <strong>Master Produk Jakmall</strong>).
+  </p>
+<?php endif; ?>
 
 <form method="post" class="order-edit">
   <?= csrf_field() ?>
