@@ -97,6 +97,5 @@ $groups = [
       <li>Sertakan <strong>Laporan Pesanan Jakmall</strong> agar pesanan dropship + biaya mitranya tertandai otomatis.</li>
     </ol>
     <p class="hint">Boleh unggah beberapa file sekaligus. Setelah Import, pesan hasil merinci file apa saja yang terbaca &amp; jumlahnya. Import ulang tidak menggandakan data — pesanan lama justru dilengkapi.</p>
-    <a class="btn btn-secondary full" href="templates/contoh-pesanan.csv" download>⬇️ Template CSV (opsional)</a>
   </div>
 </div>

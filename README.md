@@ -52,13 +52,16 @@ Laba = Pendapatan − Total Biaya
 Untuk pesanan **dropship**, modal dihitung dari biaya beli ke Jakmall, bukan HPP stok sendiri.
 
 ## Import laporan pesanan
-1. Ekspor laporan pesanan (CSV) dari Seller Center marketplace.
-2. Daftarkan produk + SKU + HPP di menu **Produk & HPP**.
-3. Menu **Import Laporan** → pilih toko & jenis pemenuhan → unggah CSV.
+Unggah langsung file ekspor (.xlsx/.csv) — tanpa template khusus. Di menu
+**Import Laporan**: pilih toko tujuan, lalu unggah file sesuai marketplace:
+- **Shopee:** Laporan Penghasilan + Order Completed
+- **Tokopedia/TikTok:** Laporan Penghasilan + Pesanan Selesai (CSV)
+- **Jakmall:** Master Produk (modal/HPP per SKU) + Laporan Pesanan (deteksi dropship)
 
-Sistem mengenali nama kolom umum dari berbagai format ekspor. Template contoh ada di
-`templates/contoh-pesanan.csv` (bisa diunduh dari halaman Import). Import ulang file
-yang sama tidak menggandakan data.
+Sistem mengenali jenis & kolom tiap file otomatis dari isinya, menggabungkannya per
+nomor pesanan, dan menghitung laba dari uang bersih marketplace (Total Penghasilan /
+penyelesaian) dikurangi modal. Import ulang tidak menggandakan data — pesanan lama
+justru dilengkapi (SKU/HPP/biaya terisi saat file pelengkap menyusul).
 
 ## Struktur file
 ```
@@ -67,10 +70,10 @@ config.php           Kredensial database (jangan dibagikan)
 schema.sql           Struktur tabel + data contoh (import via phpMyAdmin)
 inc/db.php           Koneksi PDO + helper kueri
 inc/helpers.php      Format uang, perhitungan laba, label
-inc/marketplace.php  Parser CSV (toleran variasi kolom)
+inc/marketplace.php  Parser ekspor (xlsx/csv) + deteksi format otomatis
+inc/xlsx.php         Pembaca .xlsx murni-PHP (tanpa library)
 inc/actions.php      Proses form (buat/ubah/hapus/import)
 inc/layout.php       Header/sidebar/footer
 pages/               Halaman: dashboard, orders, order_detail, import, products, stores, suppliers
 assets/style.css     Tampilan
-templates/           Template CSV contoh
 ```

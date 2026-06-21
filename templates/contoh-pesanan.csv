@@ -1,6 +1,0 @@
-order_no,order_date,status,buyer,product_name,sku,qty,unit_price,admin_fee,shipping_cost_seller,voucher_seller
-INV-1001,2026-06-01,Selesai,Andi,Kaos Polos Putih M,KAOS-PUTIH-M,2,75000,9750,0,5000
-INV-1002,2026-06-02,Dikirim,Budi,Topi Baseball Hitam,TOPI-HITAM,1,90000,5850,10000,0
-INV-1003,2026-06-03,Selesai,Citra,Tumbler Stainless 500ml,TUMBLER-500,1,120000,12675,0,0
-INV-1003,2026-06-03,Selesai,Citra,Kaos Polos Putih M,KAOS-PUTIH-M,1,75000,,,
-INV-1004,2026-06-05,Dibayar,Dewi,Sandal Karet Anti Slip,SANDAL-AS,3,45000,8775,0,10000

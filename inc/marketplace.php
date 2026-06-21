@@ -68,7 +68,6 @@ const MP_COLUMNS = [
     'otherCost'  => ['other_cost', 'biaya lain'],
     'sku'        => ['sku', 'sku produk', 'seller sku', 'nomor referensi sku', 'sku induk'],
     'productName' => ['product_name', 'nama produk', 'product name'],
-    'variation'  => ['nama variasi', 'variation name', 'variasi'],
     'qty'        => ['qty', 'quantity', 'jumlah', 'kuantitas'],
     'unitPrice'  => ['unit_price', 'harga setelah diskon', 'sku unit original price', 'harga satuan', 'harga awal', 'original price', 'harga jual'],
 ];

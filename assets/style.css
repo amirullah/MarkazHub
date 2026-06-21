@@ -157,7 +157,6 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 }
 .upload-slot:hover { border-color: var(--brand); background: var(--slate-50); }
 .upload-slot.is-selected { border-color: var(--pos); background: #ecfdf5; box-shadow: 0 0 0 1px var(--pos); }
-.upload-ic { font-size: 1.4rem; line-height: 1.6rem; }
 .upload-body { flex: 1; min-width: 0; }
 .upload-title { font-weight: 600; color: var(--slate-700); font-size: .9rem; }
 .upload-desc { font-size: .78rem; color: var(--slate-500); margin-top: .1rem; }
