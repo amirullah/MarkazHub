@@ -1,0 +1,7 @@
+# Kredensial database asli (jangan di-commit / push ke repo publik)
+config.php
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log

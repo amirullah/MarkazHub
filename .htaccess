@@ -1,0 +1,10 @@
+# Matikan listing direktori
+Options -Indexes
+
+# Lindungi file sensitif
+<FilesMatch "(^config\.php$|\.sql$|\.md$)">
+  Require all denied
+</FilesMatch>
+
+# Halaman default
+DirectoryIndex index.php

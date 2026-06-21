@@ -1,0 +1,76 @@
+<?php
+$mp = $_GET['mp'] ?? '';
+$storeFilter = (int) ($_GET['store'] ?? 0);
+
+$where = [];
+$params = [];
+if (in_array($mp, MARKETPLACES, true)) { $where[] = 'o.marketplace = ?'; $params[] = $mp; }
+if ($storeFilter > 0) { $where[] = 'o.store_id = ?'; $params[] = $storeFilter; }
+$wsql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+$orders = q("SELECT o.*, s.name AS store_name,
+            (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) AS item_count
+            FROM orders o JOIN stores s ON s.id = o.store_id
+            $wsql ORDER BY o.order_date DESC LIMIT 300", $params);
+$stores = q('SELECT id, name FROM stores ORDER BY name');
+$t = jumlah_laba($orders);
+
+$importBtn = '<a class="btn btn-primary" href="' . e(url('import')) . '">📥 Import</a>';
+page_header('Pesanan', 'Semua pesanan beserta laba per pesanan.', $importBtn);
+?>
+
+<div class="filters">
+  <a class="chip<?= (!$mp && !$storeFilter) ? ' active' : '' ?>" href="<?= e(url('orders')) ?>">Semua</a>
+  <?php foreach (MARKETPLACES as $m): ?>
+    <a class="chip<?= ($mp === $m && !$storeFilter) ? ' active' : '' ?>" href="<?= e(url('orders', ['mp' => $m])) ?>"><?= e(MARKETPLACE_LABEL[$m]) ?></a>
+  <?php endforeach; ?>
+  <?php if ($stores): ?>
+    <form method="get" class="filter-form">
+      <input type="hidden" name="p" value="orders">
+      <select name="store" class="input" onchange="this.form.submit()">
+        <option value="0">Semua toko</option>
+        <?php foreach ($stores as $s): ?>
+          <option value="<?= $s['id'] ?>" <?= $storeFilter === (int)$s['id'] ? 'selected' : '' ?>><?= e($s['name']) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </form>
+  <?php endif; ?>
+</div>
+
+<?php if (count($orders) === 0): ?>
+  <div class="empty">
+    <div class="empty-ic">📭</div><h3>Belum ada pesanan</h3>
+    <p class="muted">Import laporan dari marketplace untuk mulai menghitung keuntungan.</p>
+    <a class="btn btn-primary" href="<?= e(url('import')) ?>">Import Laporan</a>
+  </div>
+<?php else: ?>
+  <div class="stat-grid four">
+    <div class="card stat"><div class="stat-label">Omzet</div><div class="stat-val"><?= rupiah($t['revenue']) ?></div></div>
+    <div class="card stat"><div class="stat-label">Biaya</div><div class="stat-val"><?= rupiah($t['totalCost']) ?></div></div>
+    <div class="card stat"><div class="stat-label">Laba</div><div class="stat-val <?= $t['profit'] >= 0 ? 'pos' : 'neg' ?>"><?= rupiah($t['profit']) ?></div><div class="stat-hint">Margin <?= persen($t['margin']) ?></div></div>
+    <div class="card stat"><div class="stat-label">Pesanan</div><div class="stat-val"><?= count($orders) ?></div></div>
+  </div>
+
+  <div class="card table-wrap">
+    <table>
+      <thead><tr>
+        <th>No. Pesanan</th><th>Tanggal</th><th>Toko</th><th>Pemenuhan</th><th>Status</th>
+        <th class="right">Omzet</th><th class="right">Laba</th>
+      </tr></thead>
+      <tbody>
+      <?php foreach ($orders as $o): $p = hitung_laba($o); ?>
+        <tr>
+          <td><a class="link" href="<?= e(url('order_detail', ['id' => $o['id']])) ?>"><?= e($o['external_no']) ?></a>
+            <div class="muted tiny"><?= (int)$o['item_count'] ?> item</div></td>
+          <td class="muted nowrap"><?= tanggal($o['order_date']) ?></td>
+          <td><?= badge_marketplace($o['marketplace']) ?><div class="muted tiny"><?= e($o['store_name']) ?></div></td>
+          <td class="muted tiny"><?= e(FULFILLMENT_LABEL[$o['fulfillment']]) ?></td>
+          <td><?= badge_status($o['status']) ?></td>
+          <td class="right"><?= rupiah($p['revenue']) ?></td>
+          <td class="right bold <?= $p['profit'] >= 0 ? 'pos' : 'neg' ?>"><?= rupiah($p['profit']) ?></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+<?php endif; ?>
