@@ -47,6 +47,28 @@ unset($_SESSION['import_report']);
     </table>
   </div>
 <?php endif; ?>
+<?php $hppChanges = $_SESSION['hpp_changes'] ?? null; unset($_SESSION['hpp_changes']); ?>
+<?php if ($hppChanges): ?>
+  <div class="card pad import-report">
+    <div class="report-head">💲 Perubahan harga HPP terdeteksi: <span class="rep-fail-txt"><?= count($hppChanges) ?> SKU</span></div>
+    <table class="report-table">
+      <thead><tr><th>SKU</th><th>Produk</th><th class="right">HPP lama</th><th class="right">HPP baru</th><th class="right">Selisih</th></tr></thead>
+      <tbody>
+      <?php foreach (array_slice($hppChanges, 0, 100) as $c): $d = $c['new'] - $c['old']; ?>
+        <tr>
+          <td class="rep-name"><?= e($c['sku']) ?></td>
+          <td><?= e(mb_strimwidth((string) $c['name'], 0, 42, '…')) ?></td>
+          <td class="right"><?= rupiah($c['old']) ?></td>
+          <td class="right"><?= rupiah($c['new']) ?></td>
+          <td class="right <?= $d > 0 ? 'neg' : 'pos' ?>"><?= ($d > 0 ? '+' : '') . rupiah($d) ?></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+    <?php if (count($hppChanges) > 100): ?><p class="hint">…dan <?= count($hppChanges) - 100 ?> SKU lain.</p><?php endif; ?>
+    <p class="hint">Pesanan lama <strong>tidak berubah</strong> (tetap pakai HPP saat itu). Untuk menerapkan harga baru ke pesanan lama, centang <em>"Perbarui HPP pesanan lama"</em> saat import Master.</p>
+  </div>
+<?php endif; ?>
 <div class="two-col">
   <div class="card pad">
     <?php if (count($stores) === 0): ?>
@@ -89,6 +111,17 @@ unset($_SESSION['import_report']);
 
         <p class="hint" style="margin-top:10px">Pemenuhan terdeteksi otomatis: pesanan yang ada di <strong>Laporan Pesanan Jakmall</strong> = <strong>Dropship</strong> (modal = total transaksi Jakmall termasuk biaya mitra); sisanya = <strong>Packing Sendiri</strong>. Tak perlu pilih manual.</p>
 
+        <div class="upload-group" data-ch="ALL" style="margin-top:6px">
+          <div class="upload-group-head">⚙️ Opsi HPP (saat unggah Master Produk Jakmall)</div>
+          <label class="radio-line"><input type="checkbox" name="update_old_hpp" value="1" id="upd-hpp"> Perbarui HPP <strong>pesanan lama</strong> dengan harga baru dari Master ini</label>
+          <p class="hint">Default (tidak dicentang): pesanan lama tetap pakai HPP saat itu — <strong>histori harga terjaga</strong>. Centang hanya bila ingin menimpa HPP pesanan lama dengan harga baru.</p>
+          <div class="field" id="upd-hpp-date" style="display:none; margin-top:6px">
+            <label class="label">Hanya pesanan sejak tanggal (opsional)</label>
+            <input type="date" name="update_old_hpp_since" class="input">
+            <p class="hint">Kosongkan = semua periode. Isi mis. tanggal Master ini mulai berlaku, agar pesanan sebelum tanggal itu tetap pakai harga lama.</p>
+          </div>
+        </div>
+
         <button class="btn btn-primary full" style="margin-top:10px">Import Sekarang</button>
       </form>
       <script>
@@ -124,6 +157,11 @@ unset($_SESSION['import_report']);
           }
           sel.addEventListener('change', sync);
           sync();
+        })();
+        // Tampilkan field tanggal saat opsi "perbarui HPP pesanan lama" dicentang.
+        (function () {
+          var cb = document.getElementById('upd-hpp'), d = document.getElementById('upd-hpp-date');
+          if (cb && d) { cb.addEventListener('change', function () { d.style.display = cb.checked ? '' : 'none'; }); }
         })();
       </script>
     <?php endif; ?>

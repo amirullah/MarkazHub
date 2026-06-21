@@ -204,18 +204,50 @@ function import_jakmall_products(array $products): array
         'INSERT INTO product_marketplace_ids (marketplace_product_id, sku) VALUES (?,?)
          ON DUPLICATE KEY UPDATE sku=VALUES(sku)'
     );
-    $ins = 0; $upd = 0;
+    // Harga modal lama per SKU (untuk deteksi perubahan harga HPP).
+    $oldCost = [];
+    foreach ($pdo->query('SELECT sku, cost_price FROM products') as $r) $oldCost[$r['sku']] = (float) $r['cost_price'];
+
+    $ins = 0; $upd = 0; $changes = [];
     $pdo->beginTransaction();
     foreach ($products as $p) {
         if (($p['sku'] ?? '') === '') continue;
-        $st->execute([$p['sku'], mb_substr((string) $p['name'], 0, 255), (float) $p['cost'], (float) $p['cost'], $supId]);
+        $new = (float) $p['cost'];
+        if (isset($oldCost[$p['sku']]) && abs($oldCost[$p['sku']] - $new) > 1) {
+            $changes[] = ['sku' => $p['sku'], 'name' => (string) $p['name'],
+                'old' => $oldCost[$p['sku']], 'new' => $new];
+        }
+        $st->execute([$p['sku'], mb_substr((string) $p['name'], 0, 255), $new, $new, $supId]);
         if ($st->rowCount() === 1) $ins++; else $upd++; // 1=insert, 2=update (MySQL)
         foreach ($p['mpIds'] ?? [] as $mpId) {
             $stId->execute([mb_substr((string) $mpId, 0, 64), $p['sku']]);
         }
     }
     $pdo->commit();
-    return [$ins, $upd];
+    return [$ins, $upd, $changes];
+}
+
+// Hitung ULANG HPP pesanan SELF dari katalog terkini (MENIMPA yang lama). Dipakai
+// hanya bila user memilih "perbarui HPP pesanan lama". Bisa dibatasi sejak tanggal
+// tertentu ($since, format Y-m-d) agar pesanan lebih lama tetap pakai harga lama.
+function recompute_hpp(?string $since = null): int
+{
+    $cond = $since ? ' AND o.order_date >= ?' : '';
+    $par = $since ? [$since] : [];
+    exec_sql(
+        "UPDATE order_items i
+         JOIN orders o ON o.id = i.order_id
+         JOIN products p ON p.sku = i.sku
+         SET i.unit_cost = p.cost_price
+         WHERE o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF'" . $cond,
+        $par
+    );
+    return exec_sql(
+        "UPDATE orders o
+         SET o.cogs = COALESCE((SELECT SUM(i.unit_cost*i.qty) FROM order_items i WHERE i.order_id=o.id), 0)
+         WHERE o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF'" . $cond,
+        $par
+    );
 }
 
 // Ubah baris pesanan DB (+ itemnya) ke bentuk ternormalisasi $o, supaya bisa
@@ -666,10 +698,18 @@ function handle_import(): void
 
     $msgs = [];
     if ($jakmall) {
-        [$ins, $upd] = import_jakmall_products(array_values($jakmall));
+        [$ins, $upd, $changes] = import_jakmall_products(array_values($jakmall));
         $bf = backfill_hpp();
-        $msgs[] = "Master produk Jakmall: $ins baru, $upd diperbarui" .
-            ($bf ? "; $bf pesanan lama (SELF) kini ber-HPP." : ".");
+        $msg = "Master produk Jakmall: $ins baru, $upd diperbarui";
+        if ($changes) { $_SESSION['hpp_changes'] = $changes; $msg .= '; ' . count($changes) . ' HPP berubah harga (lihat rincian)'; }
+        if ($bf) $msg .= "; $bf pesanan lama (SELF) kini ber-HPP";
+        // Opsi manual: perbarui HPP pesanan lama dengan harga baru (boleh batasi tanggal).
+        if (!empty($_POST['update_old_hpp'])) {
+            $since = preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($_POST['update_old_hpp_since'] ?? '')) ? trim($_POST['update_old_hpp_since']) : null;
+            $rc = recompute_hpp($since);
+            $msg .= "; $rc pesanan lama DIPERBARUI ke harga baru" . ($since ? " (sejak $since)" : ' (semua periode)');
+        }
+        $msgs[] = $msg . '.';
     }
 
     if ($orderSources) {
