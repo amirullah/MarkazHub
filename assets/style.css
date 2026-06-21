@@ -136,6 +136,7 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 .flash { padding: .75rem 1rem; border-radius: .5rem; margin-bottom: 1rem; font-size: .88rem; border: 1px solid; }
 .flash-success { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
 .flash-error { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+.flash-warning { background: #fffbeb; border-color: #fde68a; color: #b45309; }
 .steps { margin: 0 0 1rem; padding-left: 1.25rem; }
 .steps li { margin-bottom: .5rem; font-size: .88rem; }
 

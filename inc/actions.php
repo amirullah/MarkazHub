@@ -567,22 +567,22 @@ function handle_import(): void
         }
     }
 
-    // PENGAMAN: tolak bila file pesanan tak cocok dengan marketplace toko
-    // (mis. file Shopee diunggah ke toko Tokopedia). Tidak ada yang diimpor.
+    // SARING per channel: file pesanan yang cocok channel toko diimpor; yang beda
+    // channel DILEWATI (bukan blokir semua) — mis. 1 file Shopee nyelip di antara
+    // file Tokopedia tetap membiarkan file lain terimpor. Jakmall selalu diimpor.
+    $skipped = [];
     if ($orderSources && $store) {
         $grp = mp_market_group($store['marketplace']);
-        $bad = [];
-        foreach ($orderFiles as $of) {
-            if ($of['mk'] !== null && $of['mk'] !== $grp) $bad[] = $of['name'];
+        $matched = [];
+        foreach ($orderFiles as $i => $of) {
+            if ($of['mk'] !== null && $of['mk'] !== $grp) {
+                $lbl = $of['mk'] === 'SHOPEE' ? 'Shopee' : 'Tokopedia/TikTok';
+                $skipped[] = $of['name'] . ' (file ' . $lbl . ')';
+            } else {
+                $matched[] = $orderSources[$i];
+            }
         }
-        if ($bad) {
-            $fileLabel = in_array('SHOPEE', array_column(array_filter($orderFiles, fn($f) => in_array($f['name'], $bad)), 'mk'), true)
-                ? 'Shopee' : 'Tokopedia/TikTok';
-            flash('error', '❌ Salah marketplace: file ' . $fileLabel . ' (' . implode(', ', $bad) .
-                ') tidak cocok dengan toko "' . $store['name'] . '" (' . MARKETPLACE_LABEL[$store['marketplace']] .
-                '). Pilih toko yang sesuai lalu ulangi. Tidak ada data yang diimpor.');
-            return;
-        }
+        $orderSources = $matched;
     }
 
     $msgs = [];
@@ -603,17 +603,31 @@ function handle_import(): void
         // Pemenuhan: dropship dideteksi otomatis dari Laporan Pesanan Jakmall;
         // sisanya dianggap Packing Sendiri (default, tanpa perlu pilihan manual).
         $msgs[] = import_shopee_orders($orders, $store, $dropshipMap, $hasJakmallReport, 'SELF');
-    } elseif ($hasJakmallReport && !$jakmall) {
+    } elseif ($hasJakmallReport && !$jakmall && !$skipped) {
         $msgs[] = '(Belum ada file pesanan yang diunggah, jadi pesanan belum dibuat.)';
     }
 
+    // Tak ada apa pun yang berhasil terbaca.
     if (!$jakmall && !$orderSources && !$hasJakmallReport) {
+        if ($skipped) {
+            $g = $store ? MARKETPLACE_LABEL[$store['marketplace']] : '';
+            flash('error', '❌ Tidak ada yang diimpor. Semua file pesanan beda channel dengan toko "' .
+                ($store['name'] ?? '') . '" (' . $g . '): ' . implode(', ', $skipped) .
+                '. Pilih toko yang sesuai channel file-nya (file Shopee → toko Shopee).');
+            return;
+        }
         $list = $unknown ? ' (' . implode(', ', $unknown) . ')' : '';
         flash('error', 'Format file tidak dikenali' . $list .
             '. Didukung: Laporan Penghasilan & file pesanan Shopee/Tokopedia/TikTok, Laporan Pesanan & Master Produk Jakmall.');
         return;
     }
     if ($unknown) $msgs[] = '⚠️ Dilewati (tak dikenali): ' . implode(', ', $unknown) . '.';
+
+    // Sebagian berhasil, sebagian file beda channel dilewati → peringatan terpisah.
+    if ($skipped) {
+        flash('warning', '⚠️ ' . count($skipped) . ' file DILEWATI karena beda channel dengan toko ini: ' .
+            implode(', ', $skipped) . '. Impor file itu ke toko channel-nya sendiri (mis. file Shopee → pilih toko Shopee).');
+    }
 
     flash('success', implode(' ', $msgs));
 }
