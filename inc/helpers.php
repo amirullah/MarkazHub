@@ -86,6 +86,13 @@ const STATUS_CLASS = [
 ];
 const SUPPLIER_TYPE_LABEL = ['SELF' => 'Stok Sendiri', 'JAKMALL' => 'Jakmall (Dropship)', 'OTHER' => 'Lainnya'];
 
+// Channel = pengelompokan marketplace untuk tampilan/filter. Tokopedia & TikTok
+// berbagi Seller Center, jadi digabung jadi satu channel.
+const CHANNEL_OF = ['SHOPEE' => 'SHOPEE', 'TOKOPEDIA' => 'TOKOTIKTOK', 'TIKTOK' => 'TOKOTIKTOK'];
+const CHANNEL_LABEL = ['SHOPEE' => 'Shopee', 'TOKOTIKTOK' => 'Tokopedia/TikTok'];
+const CHANNEL_CLASS = ['SHOPEE' => 'mp-shopee', 'TOKOTIKTOK' => 'mp-tokopedia'];
+const CHANNEL_MARKETPLACES = ['SHOPEE' => ['SHOPEE'], 'TOKOTIKTOK' => ['TOKOPEDIA', 'TIKTOK']];
+
 const MARKETPLACES = ['SHOPEE', 'TOKOPEDIA', 'TIKTOK'];
 const FULFILLMENTS = ['SELF', 'DROPSHIP'];
 const ORDER_STATUSES = ['PENDING', 'PAID', 'SHIPPED', 'COMPLETED', 'CANCELLED', 'RETURNED'];

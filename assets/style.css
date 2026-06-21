@@ -195,3 +195,19 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 .chip-need { border-color: #fed7aa; color: #9a3412; }
 .chip-need:hover { background: #fff7ed; }
 .chip-need.active { background: #ea580c; color: #fff; border-color: #ea580c; }
+
+/* ---- Filter lanjutan + pagination ---- */
+.filter-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: .6rem; }
+.filter-row .input { width: auto; }
+.inline-lbl { display: inline-flex; align-items: center; gap: .35rem; font-size: .82rem; color: var(--slate-500); }
+.inline-lbl .input { padding: .4rem .5rem; }
+.pager { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
+.pager .disabled { opacity: .4; pointer-events: none; }
+.row-editing { background: #fffbeb !important; }
+
+/* ---- Import: slot terasa seperti dropzone ---- */
+.upload-slot { border-style: dashed; }
+.upload-slot::after { content: "+ pilih file"; font-size: .72rem; color: var(--brand); font-weight: 600; align-self: center; white-space: nowrap; }
+.upload-slot.is-selected::after { content: "✓ ganti"; color: var(--pos); }
+.step-head { font-weight: 700; color: var(--slate-700); margin: 1.1rem 0 .5rem; font-size: .9rem; }
+.step-head .num { display: inline-flex; width: 1.4rem; height: 1.4rem; align-items: center; justify-content: center; background: var(--brand); color: #fff; border-radius: 999px; font-size: .8rem; margin-right: .4rem; }

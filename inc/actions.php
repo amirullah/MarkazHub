@@ -28,6 +28,26 @@ function handle_post(): void
             }
             redirect(url('stores'));
 
+        case 'update_store':
+            $id = (int) ($_POST['id'] ?? 0);
+            $name = trim($_POST['name'] ?? '');
+            $mp = $_POST['marketplace'] ?? '';
+            if ($id <= 0 || $name === '' || !in_array($mp, MARKETPLACES, true)) {
+                flash('error', 'Nama toko & marketplace wajib diisi.');
+                redirect(url('stores'));
+            }
+            try {
+                exec_sql(
+                    'UPDATE stores SET name=?, marketplace=?, default_admin_fee_percent=?, note=?, active=? WHERE id=?',
+                    [$name, $mp, (float) ($_POST['default_admin_fee_percent'] ?? 0),
+                        trim($_POST['note'] ?? '') ?: null, isset($_POST['active']) ? 1 : 0, $id]
+                );
+                flash('success', 'Toko diperbarui.');
+            } catch (PDOException $e) {
+                flash('error', 'Gagal: nama toko itu sudah ada di marketplace tersebut.');
+            }
+            redirect(url('stores'));
+
         case 'delete_store':
             $id = (int) ($_POST['id'] ?? 0);
             $cnt = (int) scalar('SELECT COUNT(*) FROM orders WHERE store_id = ?', [$id]);
@@ -243,9 +263,15 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
     // Pass 1: gabungkan tiap pesanan import dengan pesanan lama di DB (yang lebih
     // kaya menang). Kumpulkan ID Produk marketplace dari item yang belum ber-SKU
     // (item Laporan Penghasilan hanya punya ID Produk Shopee + nama).
-    $prepared = []; $mpIds = [];
+    $prepared = []; $mpIds = []; $dupOther = 0; $dupList = [];
     foreach ($orders as $o) {
         $ex = q1('SELECT * FROM orders WHERE store_id = ? AND external_no = ?', [$storeId, $o['externalNo']]);
+        // PENCEGAH DUPLIKAT: nomor pesanan unik global. Jika sudah ada di toko LAIN,
+        // jangan dibuat lagi (cegah satu pesanan tercatat di >1 toko).
+        if (!$ex) {
+            $other = q1('SELECT o.id, s.name FROM orders o JOIN stores s ON s.id=o.store_id WHERE o.external_no = ? LIMIT 1', [$o['externalNo']]);
+            if ($other) { $dupOther++; if (count($dupList) < 5) $dupList[] = $o['externalNo'] . '→' . $other['name']; continue; }
+        }
         $exItems = $ex ? q('SELECT * FROM order_items WHERE order_id = ?', [$ex['id']]) : [];
         if ($ex) $o = mp_merge_orders([[order_row_to_norm($ex, $exItems)], [$o]])[0];
         foreach ($o['items'] as $it) {
@@ -368,6 +394,12 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
             $adminFee = ($o['adminFee'] ?? 0) > 0 ? (float) $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
         }
         $status = mp_map_status($o['status'] ?? '');
+        // Pesanan DIBATALKAN (tak jadi dikirim) = tak ada uang → laba 0, bukan minus.
+        // (Retur tetap pakai nilai riil dari Income, bisa 0 atau minus sesuai fakta.)
+        if ($status === 'CANCELLED') {
+            $revenue = 0.0; $adminFee = 0.0; $cogs = 0.0; $dropship = 0.0;
+            $o['voucherSellerBorne'] = 0; $o['shippingCostSeller'] = 0; $o['otherCost'] = 0; $o['otherIncome'] = 0;
+        }
         $skuCount = 0; $hasAssumed = false;
         foreach ($items as $x) { if (!empty($x['sku'])) $skuCount++; if ($x['qty_assumed']) $hasAssumed = true; }
         if ($hasAssumed) $qtyAssumedN++;
@@ -443,6 +475,10 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
 
     $msg = "Pesanan: $created baru, $updated diperbarui, $unchanged tetap" . ($failed ? ", $failed gagal" : '') .
         ". ($nDrop dropship, $nSelf packing sendiri.)";
+    if ($dupOther > 0) {
+        $msg .= " ⚠️ $dupOther pesanan dilewati karena sudah ada di toko lain (cegah duplikat): " .
+            implode(', ', $dupList) . ($dupOther > count($dupList) ? ', …' : '') . '.';
+    }
     if ($partnerTotal > 0) $msg .= ' Total biaya mitra Jakmall: Rp' . number_format($partnerTotal, 0, ',', '.') . '.';
     if ($selfNoHpp > 0) {
         $msg .= " ⚠️ $selfNoHpp pesanan packing-sendiri belum ber-HPP";

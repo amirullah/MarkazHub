@@ -72,3 +72,10 @@ function badge_status(string $st): string
 {
     return '<span class="badge ' . STATUS_CLASS[$st] . '">' . e(STATUS_LABEL[$st]) . '</span>';
 }
+
+// Badge channel (Shopee / Tokopedia-TikTok digabung).
+function badge_channel(string $mp): string
+{
+    $ch = CHANNEL_OF[$mp] ?? 'SHOPEE';
+    return '<span class="badge ' . CHANNEL_CLASS[$ch] . '">' . e(CHANNEL_LABEL[$ch]) . '</span>';
+}

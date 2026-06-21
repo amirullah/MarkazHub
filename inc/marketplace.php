@@ -59,6 +59,7 @@ const MP_COLUMNS = [
     'externalNo' => ['order_no', 'nomor_pesanan', 'no_pesanan', 'no. pesanan', 'order id', 'order sn', 'ordersn', 'invoice', 'nomor invoice'],
     'orderDate'  => ['order_date', 'tanggal', 'tanggal pesanan', 'waktu pesanan dibuat', 'created time', 'order creation date'],
     'status'     => ['status', 'order status', 'status pesanan'],
+    'returnReason' => ['cancel reason', 'alasan pembatalan', 'cancelation/return type', 'status pembatalan/ pengembalian', 'alasan'],
     'buyerName'  => ['buyer', 'buyer name', 'pembeli', 'username pembeli', 'username (pembeli)', 'nama pembeli'],
     'shippingChargedToBuyer' => ['shipping_charged', 'ongkir dibayar pembeli', 'ongkos kirim dibayar oleh pembeli', 'ongkos kirim dibayar pembeli', 'shipping fee paid by buyer'],
     'adminFee'   => ['admin_fee', 'biaya admin', 'biaya administrasi', 'biaya layanan', 'commission fee', 'transaction fee', 'platform fee'],
@@ -158,6 +159,9 @@ function mp_rows_to_orders(array $rows): array
                 'otherIncome' => mp_num(mp_pick($r, MP_COLUMNS['otherIncome'])),
                 'otherCost'  => mp_num(mp_pick($r, MP_COLUMNS['otherCost'])),
                 'productRevenue' => 0,
+                // Alasan retur/batal (bila ada) -> disimpan ke catatan pesanan,
+                // agar kondisi retur (tdk sampai / dikembalikan pembeli) terlihat.
+                'note'       => mp_pick($r, MP_COLUMNS['returnReason']) ?: null,
                 'items'      => [],
             ];
         }

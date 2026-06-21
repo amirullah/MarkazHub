@@ -28,17 +28,18 @@ $groups = [
       <form method="post" enctype="multipart/form-data">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="import_orders">
+        <div class="step-head"><span class="num">1</span>Pilih toko tujuan</div>
         <div class="field">
-          <label class="label">Toko Tujuan <span class="muted">(untuk file pesanan)</span></label>
           <select name="store_id" class="input">
             <option value="">— Pilih toko —</option>
             <?php foreach ($stores as $s): ?>
               <option value="<?= $s['id'] ?>"><?= e($s['name']) ?> · <?= e(MARKETPLACE_LABEL[$s['marketplace']]) ?></option>
             <?php endforeach; ?>
           </select>
-          <p class="hint">Pilih toko sesuai marketplace file pesanan yang Anda unggah.</p>
+          <p class="hint">Pilih toko sesuai marketplace file pesanan. File Shopee ke toko Shopee, file Tokopedia/TikTok ke toko Tokopedia/TikTok (kalau salah, otomatis ditolak).</p>
         </div>
 
+        <div class="step-head"><span class="num">2</span>Pilih file (klik tiap kotak — boleh beberapa file)</div>
         <?php foreach ($groups as $g): ?>
           <div class="upload-group">
             <div class="upload-group-head"><?= $g['title'] ?> <span class="muted">· <?= e($g['note']) ?></span></div>
