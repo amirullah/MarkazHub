@@ -61,7 +61,13 @@ page_header('Pesanan', 'Semua pesanan beserta laba per pesanan.', $importBtn);
       <?php foreach ($orders as $o): $p = hitung_laba($o); ?>
         <tr>
           <td><a class="link" href="<?= e(url('order_detail', ['id' => $o['id']])) ?>"><?= e($o['external_no']) ?></a>
-            <div class="muted tiny"><?= (int)$o['item_count'] ?> item</div></td>
+            <div class="muted tiny"><?= (int)$o['item_count'] ?> item ·
+              <?php if (!empty($o['income_verified'])): ?>
+                <span class="net-tag net-ok" title="Laba dari Total Penghasilan Shopee (uang bersih riil)">✓ bersih</span>
+              <?php else: ?>
+                <span class="net-tag net-est" title="Laba estimasi: biaya admin dari persentase toko (belum ada Laporan Penghasilan)">≈ estimasi</span>
+              <?php endif; ?>
+            </div></td>
           <td class="muted nowrap"><?= tanggal($o['order_date']) ?></td>
           <td><?= badge_marketplace($o['marketplace']) ?><div class="muted tiny"><?= e($o['store_name']) ?></div></td>
           <td class="muted tiny"><?= e(FULFILLMENT_LABEL[$o['fulfillment']]) ?></td>

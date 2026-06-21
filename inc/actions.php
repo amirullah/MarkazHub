@@ -253,6 +253,7 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
         ($ful === 'DROPSHIP') ? $nDrop++ : $nSelf++;
 
         $revenue = $o['productRevenue'];
+        $verified = !empty($o['_hasIncome']) ? 1 : 0; // laba dari Total Penghasilan riil?
         $adminFee = ($o['adminFee'] ?? 0) > 0 ? $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
 
         $pdo->beginTransaction();
@@ -260,12 +261,12 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
             exec_sql(
                 'INSERT INTO orders (store_id, external_no, marketplace, status, fulfillment, order_date,
                     buyer_name, product_revenue, shipping_charged_to_buyer, other_income, cogs, admin_fee,
-                    shipping_cost_seller, voucher_seller_borne, dropship_cost, other_cost, note)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                    shipping_cost_seller, voucher_seller_borne, dropship_cost, other_cost, income_verified, note)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 [$storeId, $no, $store['marketplace'], mp_map_status($o['status'] ?? ''), $ful,
                     mp_parse_date($o['orderDate'] ?? null), ($o['buyerName'] ?? '') ?: null, $revenue,
                     $o['shippingChargedToBuyer'] ?? 0, $o['otherIncome'] ?? 0, $cogs, $adminFee,
-                    $o['shippingCostSeller'] ?? 0, $o['voucherSellerBorne'] ?? 0, $dropship, $o['otherCost'] ?? 0, $note]
+                    $o['shippingCostSeller'] ?? 0, $o['voucherSellerBorne'] ?? 0, $dropship, $o['otherCost'] ?? 0, $verified, $note]
             );
             $orderId = (int) $pdo->lastInsertId();
             foreach ($items as $it) {

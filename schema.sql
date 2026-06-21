@@ -70,6 +70,9 @@ CREATE TABLE orders (
   voucher_seller_borne DECIMAL(14,2) NOT NULL DEFAULT 0,
   dropship_cost DECIMAL(14,2) NOT NULL DEFAULT 0,
   other_cost DECIMAL(14,2) NOT NULL DEFAULT 0,
+  -- 1 = laba dari "Total Penghasilan" Shopee (uang bersih riil);
+  -- 0 = estimasi (biaya admin dari persentase toko, belum ada Laporan Penghasilan)
+  income_verified TINYINT(1) NOT NULL DEFAULT 0,
   note VARCHAR(500) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_order (store_id, external_no),

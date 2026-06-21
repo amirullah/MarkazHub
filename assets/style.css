@@ -163,3 +163,11 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 .upload-desc { font-size: .78rem; color: var(--slate-500); margin-top: .1rem; }
 .file-status { font-size: .78rem; margin-top: .35rem; word-break: break-all; }
 .file-ok { color: var(--pos); font-weight: 600; }
+
+/* ---- Penanda sumber laba (bersih riil vs estimasi) ---- */
+.net-tag { font-size: .68rem; font-weight: 600; padding: .05rem .35rem; border-radius: .3rem; white-space: nowrap; }
+.net-ok { color: #065f46; background: #d1fae5; }
+.net-est { color: #92400e; background: #fef3c7; }
+.net-note { font-size: .78rem; line-height: 1.35; padding: .55rem .65rem; border-radius: .5rem; margin-bottom: .75rem; }
+.net-ok-bg { color: #065f46; background: #ecfdf5; border: 1px solid #a7f3d0; }
+.net-est-bg { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; }
