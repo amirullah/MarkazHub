@@ -127,6 +127,11 @@ function handle_post(): void
             handle_import();
             redirect(url('import'));
 
+        // ---------- KOSONGKAN DATA (dengan verifikasi) ----------
+        case 'clear_data':
+            handle_clear_data();
+            redirect(url('import'));
+
         default:
             redirect(url('dashboard'));
     }
@@ -190,10 +195,11 @@ function order_row_to_norm(array $ex, array $exItems): array
     $items = [];
     foreach ($exItems as $it) {
         $items[] = [
-            'sku'       => $it['sku'] ?: null,
-            'name'      => $it['name'],
-            'qty'       => (int) $it['qty'],
-            'unitPrice' => (float) $it['unit_price'],
+            'sku'        => $it['sku'] ?: null,
+            'name'       => $it['name'],
+            'qty'        => (int) $it['qty'],
+            'qtyAssumed' => !empty($it['qty_assumed']),
+            'unitPrice'  => (float) $it['unit_price'],
         ];
     }
     return [
@@ -276,7 +282,7 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
 
     $adminPct = (float) $store['default_admin_fee_percent'];
     $created = 0; $updated = 0; $unchanged = 0; $failed = 0;
-    $nDrop = 0; $nSelf = 0; $partnerTotal = 0.0; $unmatched = []; $selfNoHpp = 0; $selfNoSku = 0;
+    $nDrop = 0; $nSelf = 0; $partnerTotal = 0.0; $unmatched = []; $selfNoHpp = 0; $selfNoSku = 0; $qtyAssumedN = 0;
     $pdo = db();
     $r = fn($v) => (int) round((float) $v);
 
@@ -311,6 +317,7 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
                 'sku' => $it['sku'] ?: null,
                 'name' => $it['name'],
                 'qty' => $it['qty'],
+                'qty_assumed' => !empty($it['qtyAssumed']) ? 1 : 0,
                 'unit_price' => $it['unitPrice'],
                 'unit_cost' => $unitCost,
             ];
@@ -351,7 +358,9 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
             $adminFee = ($o['adminFee'] ?? 0) > 0 ? (float) $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
         }
         $status = mp_map_status($o['status'] ?? '');
-        $skuCount = 0; foreach ($items as $x) if (!empty($x['sku'])) $skuCount++;
+        $skuCount = 0; $hasAssumed = false;
+        foreach ($items as $x) { if (!empty($x['sku'])) $skuCount++; if ($x['qty_assumed']) $hasAssumed = true; }
+        if ($hasAssumed) $qtyAssumedN++;
 
         // Statistik pemenuhan & HPP (atas keadaan final, semua pesanan diproses).
         if ($ful === 'DROPSHIP') {
@@ -366,13 +375,17 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
 
         // Deteksi perubahan supaya re-import tanpa data baru = tidak diutak-atik.
         if ($ex) {
-            $exSkuCount = 0; foreach ($exItems as $x) if (!empty($x['sku'])) $exSkuCount++;
+            $exSkuCount = 0; $exQty = 0; $exAssumed = 0;
+            foreach ($exItems as $x) { if (!empty($x['sku'])) $exSkuCount++; $exQty += (int) $x['qty']; $exAssumed += !empty($x['qty_assumed']) ? 1 : 0; }
+            $newQty = 0; $newAssumed = 0;
+            foreach ($items as $x) { $newQty += (int) $x['qty']; $newAssumed += $x['qty_assumed'] ? 1 : 0; }
             $same = $ex['fulfillment'] === $ful && (int) $ex['income_verified'] === $verified
                 && $ex['status'] === $status
                 && $r($ex['product_revenue']) === $r($revenue) && $r($ex['admin_fee']) === $r($adminFee)
                 && $r($ex['cogs']) === $r($cogs) && $r($ex['dropship_cost']) === $r($dropship)
                 && $r($ex['other_cost']) === $r($o['otherCost'] ?? 0) && $r($ex['voucher_seller_borne']) === $r($o['voucherSellerBorne'] ?? 0)
-                && count($exItems) === count($items) && $exSkuCount === $skuCount;
+                && count($exItems) === count($items) && $exSkuCount === $skuCount
+                && $exQty === $newQty && $exAssumed === $newAssumed;
             if ($same) { $unchanged++; continue; }
         }
 
@@ -405,9 +418,9 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
             }
             foreach ($items as $it) {
                 exec_sql(
-                    'INSERT INTO order_items (order_id, product_id, sku, name, qty, unit_price, unit_cost)
-                     VALUES (?,?,?,?,?,?,?)',
-                    [$orderId, $it['product_id'], $it['sku'], $it['name'], $it['qty'], $it['unit_price'], $it['unit_cost']]
+                    'INSERT INTO order_items (order_id, product_id, sku, name, qty, qty_assumed, unit_price, unit_cost)
+                     VALUES (?,?,?,?,?,?,?,?)',
+                    [$orderId, $it['product_id'], $it['sku'], $it['name'], $it['qty'], $it['qty_assumed'], $it['unit_price'], $it['unit_cost']]
                 );
             }
             $pdo->commit();
@@ -428,6 +441,10 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
         }
         $msg .= '.';
     }
+    if ($qtyAssumedN > 0) {
+        $msg .= " ⚠️ $qtyAssumedN pesanan qty-nya diasumsikan 1 (dari Laporan Penghasilan yang tak memuat jumlah)" .
+            " — impor file pesanan (Order Completed / Pesanan Selesai) periode sama untuk qty & HPP akurat.";
+    }
     if ($unmatched) {
         $list = implode(', ', array_slice(array_keys($unmatched), 0, 8));
         $msg .= ' ⚠️ SKU belum ada di katalog (HPP 0): ' . $list .
@@ -436,10 +453,49 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
     return $msg;
 }
 
+// Kelompok marketplace untuk pencocokan file vs toko (Tokopedia & TikTok berbagi
+// Seller Center, jadi satu kelompok).
+function mp_market_group(string $marketplace): string
+{
+    return $marketplace === 'SHOPEE' ? 'SHOPEE' : 'TIKTOKTOKO';
+}
+
+// Kosongkan data (pesanan saja, atau total termasuk katalog). Wajib verifikasi
+// ketik "KOSONGKAN" untuk mencegah kehilangan data tak sengaja.
+function handle_clear_data(): void
+{
+    $confirm = strtoupper(trim($_POST['confirm'] ?? ''));
+    $scope = ($_POST['scope'] ?? 'orders') === 'all' ? 'all' : 'orders';
+    if ($confirm !== 'KOSONGKAN') {
+        flash('error', 'Konfirmasi salah — ketik KOSONGKAN (huruf besar) untuk melanjutkan. Tidak ada data yang dihapus.');
+        return;
+    }
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $nOrders = (int) scalar('SELECT COUNT(*) FROM orders');
+        exec_sql('DELETE FROM order_items');
+        exec_sql('DELETE FROM orders');
+        if ($scope === 'all') {
+            $nProd = (int) scalar('SELECT COUNT(*) FROM products');
+            exec_sql('DELETE FROM product_marketplace_ids');
+            exec_sql('DELETE FROM products');
+            $pdo->commit();
+            flash('success', "Data dikosongkan total: $nOrders pesanan & $nProd produk dihapus.");
+        } else {
+            $pdo->commit();
+            flash('success', "Pesanan dikosongkan: $nOrders pesanan dihapus. Katalog produk tetap.");
+        }
+    } catch (PDOException $e) {
+        $pdo->rollBack();
+        flash('error', 'Gagal mengosongkan data: ' . e($e->getMessage()));
+    }
+}
+
 function handle_import(): void
 {
     $storeId = (int) ($_POST['store_id'] ?? 0);
-    $fulfillment = in_array($_POST['fulfillment'] ?? '', FULFILLMENTS, true) ? $_POST['fulfillment'] : 'SELF';
+    $store = $storeId ? q1('SELECT * FROM stores WHERE id = ?', [$storeId]) : null;
 
     $uploads = mp_collect_uploads();
     if (!$uploads) {
@@ -447,9 +503,10 @@ function handle_import(): void
         return;
     }
 
-    $orderSources = []; $jakmall = []; $dropshipMap = []; $hasJakmallReport = false; $unknown = [];
+    $orderSources = []; $orderFiles = []; $jakmall = []; $dropshipMap = []; $hasJakmallReport = false; $unknown = [];
     foreach ($uploads as $u) {
         $res = mp_read_file($u['tmp_name'], $u['name']);
+        $name = $u['name'] ?: '(tanpa nama)';
         if ($res['type'] === 'jakmall') {
             foreach ($res['products'] as $p) $jakmall[$p['sku']] = $p; // dedup per SKU
         } elseif ($res['type'] === 'jakmall_orders') {
@@ -457,8 +514,27 @@ function handle_import(): void
             foreach ($res['dropship'] as $no => $info) $dropshipMap[$no] = $info;
         } elseif ($res['type'] === 'orders' && !empty($res['orders'])) {
             $orderSources[] = $res['orders'];
+            $orderFiles[] = ['name' => $name, 'mk' => $res['marketplace'] ?? null];
         } else {
-            $unknown[] = $u['name'] ?: '(tanpa nama)';
+            $unknown[] = $name;
+        }
+    }
+
+    // PENGAMAN: tolak bila file pesanan tak cocok dengan marketplace toko
+    // (mis. file Shopee diunggah ke toko Tokopedia). Tidak ada yang diimpor.
+    if ($orderSources && $store) {
+        $grp = mp_market_group($store['marketplace']);
+        $bad = [];
+        foreach ($orderFiles as $of) {
+            if ($of['mk'] !== null && $of['mk'] !== $grp) $bad[] = $of['name'];
+        }
+        if ($bad) {
+            $fileLabel = in_array('SHOPEE', array_column(array_filter($orderFiles, fn($f) => in_array($f['name'], $bad)), 'mk'), true)
+                ? 'Shopee' : 'Tokopedia/TikTok';
+            flash('error', '❌ Salah marketplace: file ' . $fileLabel . ' (' . implode(', ', $bad) .
+                ') tidak cocok dengan toko "' . $store['name'] . '" (' . MARKETPLACE_LABEL[$store['marketplace']] .
+                '). Pilih toko yang sesuai lalu ulangi. Tidak ada data yang diimpor.');
+            return;
         }
     }
 
@@ -472,22 +548,22 @@ function handle_import(): void
     }
 
     if ($orderSources) {
-        $store = q1('SELECT * FROM stores WHERE id = ?', [$storeId]);
         if (!$store) {
             flash('error', 'Pilih toko tujuan dulu untuk import pesanan.' . ($msgs ? ' [' . implode(' ', $msgs) . ']' : ''));
             return;
         }
         $orders = mp_merge_orders($orderSources);
-        $msgs[] = import_shopee_orders($orders, $store, $dropshipMap, $hasJakmallReport, $fulfillment);
+        // Pemenuhan: dropship dideteksi otomatis dari Laporan Pesanan Jakmall;
+        // sisanya dianggap Packing Sendiri (default, tanpa perlu pilihan manual).
+        $msgs[] = import_shopee_orders($orders, $store, $dropshipMap, $hasJakmallReport, 'SELF');
     } elseif ($hasJakmallReport && !$jakmall) {
-        // Hanya laporan Jakmall tanpa file pesanan: tak ada yang bisa diimpor.
-        $msgs[] = '(Belum ada file pesanan Shopee yang diunggah, jadi pesanan belum dibuat.)';
+        $msgs[] = '(Belum ada file pesanan yang diunggah, jadi pesanan belum dibuat.)';
     }
 
     if (!$jakmall && !$orderSources && !$hasJakmallReport) {
         $list = $unknown ? ' (' . implode(', ', $unknown) . ')' : '';
         flash('error', 'Format file tidak dikenali' . $list .
-            '. Didukung: Laporan Penghasilan & Order Shopee, Laporan Pesanan & Master Produk Jakmall, atau CSV pesanan.');
+            '. Didukung: Laporan Penghasilan & file pesanan Shopee/Tokopedia/TikTok, Laporan Pesanan & Master Produk Jakmall.');
         return;
     }
     if ($unknown) $msgs[] = '⚠️ Dilewati (tak dikenali): ' . implode(', ', $unknown) . '.';

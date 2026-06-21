@@ -179,3 +179,13 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 .search-bar { display: flex; gap: .5rem; margin-bottom: .75rem; }
 .search-bar .input { flex: 1; }
 .search-bar .btn { flex: 0 0 auto; }
+
+/* ---- Penanda qty diasumsikan ---- */
+.qty-assumed { color: #b45309; font-weight: 700; cursor: help; }
+
+/* ---- Danger zone (kosongkan data) ---- */
+.danger-zone { border-color: #fecaca; background: #fffafa; }
+.radio-line { display: block; font-size: .88rem; padding: .2rem 0; cursor: pointer; }
+.radio-line input { margin-right: .4rem; }
+.btn-danger { background: var(--neg); color: #fff; }
+.btn-danger:hover { background: #b91c1c; }

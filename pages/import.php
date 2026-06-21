@@ -57,17 +57,9 @@ $groups = [
           </div>
         <?php endforeach; ?>
 
-        <div class="field" style="margin-top:14px">
-          <label class="label">Jika Laporan Pesanan Jakmall TIDAK diunggah, anggap pemenuhan sebagai:</label>
-          <select name="fulfillment" class="input">
-            <?php foreach (FULFILLMENTS as $f): ?>
-              <option value="<?= $f ?>"><?= e(FULFILLMENT_LABEL[$f]) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <p class="hint">Bila laporan Jakmall diunggah: pesanan yang ada di laporan = <strong>Dropship</strong> (modal = total transaksi Jakmall termasuk biaya mitra), sisanya = <strong>Packing Sendiri</strong>.</p>
-        </div>
+        <p class="hint" style="margin-top:10px">Pemenuhan terdeteksi otomatis: pesanan yang ada di <strong>Laporan Pesanan Jakmall</strong> = <strong>Dropship</strong> (modal = total transaksi Jakmall termasuk biaya mitra); sisanya = <strong>Packing Sendiri</strong>. Tak perlu pilih manual.</p>
 
-        <button class="btn btn-primary full">Import Sekarang</button>
+        <button class="btn btn-primary full" style="margin-top:10px">Import Sekarang</button>
       </form>
       <script>
         document.querySelectorAll('.js-file').forEach(function (inp) {
@@ -98,4 +90,23 @@ $groups = [
     </ol>
     <p class="hint">Boleh unggah beberapa file sekaligus. Setelah Import, pesan hasil merinci file apa saja yang terbaca &amp; jumlahnya. Import ulang tidak menggandakan data — pesanan lama justru dilengkapi.</p>
   </div>
+</div>
+
+<div class="card pad danger-zone" style="margin-top:1.5rem">
+  <h2 class="card-title" style="color:var(--neg)">⚠️ Kosongkan Data</h2>
+  <p class="hint" style="margin-bottom:.75rem">Menghapus data permanen — tidak bisa dibatalkan. Untuk memulai ulang/membersihkan hasil import yang keliru.</p>
+  <form method="post" onsubmit="return confirm('Yakin mengosongkan data? Tindakan ini PERMANEN dan tidak bisa dibatalkan.')">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="clear_data">
+    <div class="field">
+      <label class="label">Cakupan</label>
+      <label class="radio-line"><input type="radio" name="scope" value="orders" checked> Pesanan saja <span class="muted">(katalog produk tetap)</span></label>
+      <label class="radio-line"><input type="radio" name="scope" value="all"> Semua <span class="muted">(pesanan + katalog produk + peta SKU)</span></label>
+    </div>
+    <div class="field">
+      <label class="label">Ketik <strong>KOSONGKAN</strong> untuk konfirmasi</label>
+      <input type="text" name="confirm" class="input" placeholder="KOSONGKAN" autocomplete="off" required style="max-width:240px">
+    </div>
+    <button class="btn btn-danger">Kosongkan Data Sekarang</button>
+  </form>
 </div>

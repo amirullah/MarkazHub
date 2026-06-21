@@ -46,7 +46,7 @@ page_header('Pesanan ' . $order['external_no'],
       <tr>
         <td class="bold"><?= e($it['name']) ?></td>
         <td class="muted mono tiny"><?= e($it['sku'] ?: '—') ?><?= ($it['sku'] && !$it['product_id']) ? ' <span title="SKU belum di katalog">⚠️</span>' : '' ?></td>
-        <td class="right"><?= (int)$it['qty'] ?></td>
+        <td class="right"><?= (int)$it['qty'] ?><?= !empty($it['qty_assumed']) ? ' <span class="qty-assumed" title="Qty diasumsikan 1 dari Laporan Penghasilan — belum dipastikan file pesanan">≈</span>' : '' ?></td>
         <td class="right"><?= rupiah($it['unit_price']) ?></td>
         <td class="right"><?= rupiah($it['unit_cost']) ?></td>
         <td class="right bold"><?= rupiah($it['unit_price'] * $it['qty']) ?></td>
@@ -55,6 +55,14 @@ page_header('Pesanan ' . $order['external_no'],
     </tbody>
   </table>
 </div>
+<?php $anyAssumed = false; foreach ($items as $it) if (!empty($it['qty_assumed'])) $anyAssumed = true; ?>
+<?php if ($anyAssumed): ?>
+  <p class="net-note net-est-bg" style="margin-top:-1rem;margin-bottom:1.5rem">
+    ≈ <strong>Qty diasumsikan 1.</strong> Laporan Penghasilan tidak memuat jumlah, jadi HPP bisa kurang
+    akurat bila pesanan ini sebenarnya &gt;1 pcs. Impor file pesanan
+    (<strong>Order Completed</strong> / <strong>Pesanan Selesai</strong>) periode sama untuk qty &amp; HPP pasti.
+  </p>
+<?php endif; ?>
 <?php if (count($items) > 0 && $order['fulfillment'] === 'SELF' && (float)$order['cogs'] == 0): ?>
   <p class="net-note net-est-bg" style="margin-top:-1rem;margin-bottom:1.5rem">
     HPP masih Rp0 untuk pesanan packing-sendiri ini. Pastikan <strong>SKU</strong> produk

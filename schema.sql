@@ -90,6 +90,9 @@ CREATE TABLE order_items (
   sku VARCHAR(190) NULL,
   name VARCHAR(255) NOT NULL,
   qty INT NOT NULL DEFAULT 1,
+  -- 1 = qty diasumsikan (dari Laporan Penghasilan yang tak memuat qty),
+  -- belum dipastikan oleh file pesanan (Order Completed / Pesanan Selesai).
+  qty_assumed TINYINT(1) NOT NULL DEFAULT 0,
   unit_price DECIMAL(14,2) NOT NULL DEFAULT 0,
   unit_cost DECIMAL(14,2) NOT NULL DEFAULT 0,
   CONSTRAINT fk_item_order FOREIGN KEY (order_id)

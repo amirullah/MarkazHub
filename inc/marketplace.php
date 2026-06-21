@@ -384,11 +384,12 @@ function mp_sellerfee_items(array $rows): array
         if (!$no || !$name || $name === '-') continue;
         $pid = mp_pick($r, ['id produk', 'product id']);
         $byOrder[$no][] = [
-            'sku'       => null,
-            'shopeeId'  => ($pid && $pid !== '-') ? $pid : null,
-            'name'      => $name,
-            'qty'       => 1,
-            'unitPrice' => 0.0,
+            'sku'        => null,
+            'shopeeId'   => ($pid && $pid !== '-') ? $pid : null,
+            'name'       => $name,
+            'qty'        => 1,
+            'qtyAssumed' => true, // Laporan Penghasilan tak memuat qty -> asumsi 1
+            'unitPrice'  => 0.0,
         ];
     }
     return $byOrder;
@@ -439,7 +440,9 @@ function mp_read_file(string $path, string $origName = ''): array
 
     if ($ext === 'csv' || $ext === 'txt') {
         $rows = mp_read_csv($path);
-        return ['type' => 'orders', 'orders' => mp_rows_to_orders($rows), 'source' => 'csv'];
+        // CSV "Pesanan Selesai" Tokopedia/TikTok punya kolom Order ID + Seller SKU.
+        $mk = (count($rows) && isset($rows[0]['orderid']) && isset($rows[0]['sellersku'])) ? 'TIKTOKTOKO' : null;
+        return ['type' => 'orders', 'orders' => mp_rows_to_orders($rows), 'source' => 'csv', 'marketplace' => $mk];
     }
 
     $sheets = xlsx_read($path);
@@ -477,7 +480,7 @@ function mp_read_file(string $path, string $origName = ''): array
                 }
             }
             $orders = mp_income_to_orders(mp_assoc_rows($rows, $hi), $items);
-            return ['type' => 'orders', 'orders' => array_values($orders), 'source' => 'shopee_income'];
+            return ['type' => 'orders', 'orders' => array_values($orders), 'source' => 'shopee_income', 'marketplace' => 'SHOPEE'];
         }
     }
 
@@ -485,7 +488,7 @@ function mp_read_file(string $path, string $origName = ''): array
     foreach ($sheets as $rows) {
         $hi = mp_header_index($rows, ['no. pesanan', 'nomor referensi sku'], 5);
         if ($hi >= 0) {
-            return ['type' => 'orders', 'orders' => mp_rows_to_orders(mp_assoc_rows($rows, $hi)), 'source' => 'shopee_order'];
+            return ['type' => 'orders', 'orders' => mp_rows_to_orders(mp_assoc_rows($rows, $hi)), 'source' => 'shopee_order', 'marketplace' => 'SHOPEE'];
         }
     }
 
@@ -493,7 +496,7 @@ function mp_read_file(string $path, string $origName = ''): array
     foreach ($sheets as $rows) {
         $hi = mp_header_index($rows, ['id pesanan/penyesuaian', 'total pendapatan'], 5);
         if ($hi >= 0) {
-            return ['type' => 'orders', 'orders' => mp_tiktok_income_to_orders(mp_assoc_rows($rows, $hi)), 'source' => 'tiktok_income'];
+            return ['type' => 'orders', 'orders' => mp_tiktok_income_to_orders(mp_assoc_rows($rows, $hi)), 'source' => 'tiktok_income', 'marketplace' => 'TIKTOKTOKO'];
         }
     }
 
@@ -521,13 +524,15 @@ function mp_merge_orders(array $sources): array
             if (!isset($merged[$no])) { $merged[$no] = $o; continue; }
             $cur = $merged[$no];
 
-            // Item: pilih yang lebih kaya. Prioritas: ada SKU > ada ID Produk
-            // (bisa diresolusi ke SKU) > lebih banyak item.
-            $oHasSku = mp_items_have_sku($o['items']);
-            $curHasSku = mp_items_have_sku($cur['items']);
-            if ($oHasSku && !$curHasSku) {
+            // Item: pilih yang lebih kaya berdasar skor (SKU + qty pasti). Item dari
+            // file pesanan (qty asli) mengalahkan item Laporan Penghasilan (qty asumsi).
+            $os = mp_items_score($o['items']);
+            $cs = mp_items_score($cur['items']);
+            if ($os > $cs) {
                 $cur['items'] = $o['items'];
-            } elseif (!$oHasSku && !$curHasSku && !empty($o['items'])) {
+            } elseif ($os === $cs && !mp_items_have_sku($cur['items']) && !empty($o['items'])) {
+                // Sama-sama belum ber-SKU: pilih yang punya ID Produk (bisa diresolusi)
+                // atau yang itemnya lebih banyak.
                 $oHasId = mp_items_have_shopeeId($o['items']);
                 $curHasId = mp_items_have_shopeeId($cur['items']);
                 if (($oHasId && !$curHasId) || count($o['items']) > count($cur['items'])) {
@@ -566,4 +571,24 @@ function mp_items_have_shopeeId(array $items): bool
         if (!empty($it['shopeeId'])) return true;
     }
     return false;
+}
+
+function mp_items_qty_assumed(array $items): bool
+{
+    foreach ($items as $it) {
+        if (!empty($it['qtyAssumed'])) return true;
+    }
+    return false;
+}
+
+// Skor kekayaan daftar item (makin tinggi makin dipercaya):
+// +2 ada SKU, +1 qty pasti (bukan asumsi & ada item). Dipakai saat merge agar
+// item dari file pesanan (SKU + qty asli) mengalahkan item dari Laporan
+// Penghasilan (SKU hasil resolusi tapi qty diasumsikan 1).
+function mp_items_score(array $items): int
+{
+    $s = 0;
+    if (mp_items_have_sku($items)) $s += 2;
+    if (!empty($items) && !mp_items_qty_assumed($items)) $s += 1;
+    return $s;
 }
