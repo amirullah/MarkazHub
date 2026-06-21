@@ -4,6 +4,7 @@ $storeFilter = (int) ($_GET['store'] ?? 0);
 $statusFilter = $_GET['status'] ?? '';
 $qstr        = trim($_GET['q'] ?? '');
 $needFilter  = ($_GET['need'] ?? '') === '1';
+$unfinalFilter = ($_GET['unfinal'] ?? '') === '1';
 $from        = trim($_GET['from'] ?? '');
 $to          = trim($_GET['to'] ?? '');
 $page        = max(1, (int) ($_GET['page'] ?? 1));
@@ -24,6 +25,9 @@ $orderBy = $sortMap[$sort] . ' ' . $dir . ', o.id ' . $dir;
 $needSql = "(o.status NOT IN ('CANCELLED','RETURNED') AND
              ((SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) = 0
               OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.qty_assumed = 1)))";
+// "Belum final" = biaya marketplace belum ada (Laporan Penghasilan belum diimpor),
+// di luar pesanan batal/retur.
+$unfinalSql = "(o.income_verified = 0 AND o.status NOT IN ('CANCELLED','RETURNED'))";
 
 $where = []; $params = [];
 if (isset(CHANNEL_MARKETPLACES[$ch])) {
@@ -41,12 +45,13 @@ if ($qstr !== '') {
     $like = '%' . $qstr . '%'; array_push($params, $like, $like, $like, $like);
 }
 if ($needFilter) { $where[] = $needSql; }
+if ($unfinalFilter) { $where[] = $unfinalSql; }
 $wsql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
 // Filter aktif untuk dipertahankan di tautan (chip/pagination).
 $carry = array_filter([
     'ch' => $ch, 'store' => $storeFilter ?: '', 'status' => $statusFilter,
-    'q' => $qstr, 'need' => $needFilter ? '1' : '', 'from' => $from, 'to' => $to,
+    'q' => $qstr, 'need' => $needFilter ? '1' : '', 'unfinal' => $unfinalFilter ? '1' : '', 'from' => $from, 'to' => $to,
     'sort' => $sort !== 'date' ? $sort : '', 'dir' => strtolower($dir) !== 'desc' ? strtolower($dir) : '',
 ], fn($v) => $v !== '' && $v !== 0);
 
@@ -108,7 +113,9 @@ $presets = [
     <a class="chip<?= $ch === $ck ? ' active' : '' ?>" href="<?= e(url('orders', array_merge($chCarry, ['ch' => $ck]))) ?>"><?= e($cl) ?></a>
   <?php endforeach; ?>
   <?php $needCarry = array_diff_key($carry, ['need' => 1, 'page' => 1]); ?>
-  <a class="chip chip-need<?= $needFilter ? ' active' : '' ?>" href="<?= e(url('orders', $needFilter ? $needCarry : array_merge($needCarry, ['need' => '1']))) ?>">📥 Belum ada file pesanan</a>
+  <a class="chip chip-need<?= $needFilter ? ' active' : '' ?>" href="<?= e(url('orders', $needFilter ? $needCarry : array_merge($needCarry, ['need' => '1']))) ?>" title="Belum ada file Order Completed/Pesanan Selesai (item/SKU/qty kosong)">📥 Belum ada file pesanan</a>
+  <?php $ufCarry = array_diff_key($carry, ['unfinal' => 1, 'page' => 1]); ?>
+  <a class="chip chip-need<?= $unfinalFilter ? ' active' : '' ?>" href="<?= e(url('orders', $unfinalFilter ? $ufCarry : array_merge($ufCarry, ['unfinal' => '1']))) ?>" title="Belum ada Laporan Penghasilan (biaya marketplace belum dihitung)">≈ Belum final</a>
 </div>
 
 <form method="get" class="filter-row">
