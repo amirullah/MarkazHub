@@ -175,10 +175,14 @@ function import_jakmall_products(array $products): array
     return [$ins, $upd];
 }
 
-// Masukkan pesanan ternormalisasi (hasil merge) ke DB, hitung HPP via SKU.
-function import_shopee_orders(array $orders, array $store, string $fulfillment): string
+// Masukkan pesanan ternormalisasi (hasil merge) ke DB. Jenis pemenuhan
+// dideteksi per pesanan: bila No. Pesanan ada di Laporan Pesanan Jakmall
+// ($dropshipMap) -> DROPSHIP (modal = Total Transaksi Jakmall, termasuk biaya
+// mitra); bila laporan diunggah tapi pesanan tak ada -> SELF (HPP via SKU);
+// bila laporan tak diunggah -> pakai $defaultFulfillment.
+function import_shopee_orders(array $orders, array $store, array $dropshipMap, bool $hasJakmallReport, string $defaultFulfillment): string
 {
-    if (!$orders) return 'Tidak ada pesanan terbaca dari file.';
+    if (!$orders) return 'Tidak ada pesanan terbaca dari file pesanan.';
     $storeId = (int) $store['id'];
 
     // Peta SKU -> produk (untuk HPP otomatis), termasuk hasil upsert Jakmall.
@@ -190,8 +194,7 @@ function import_shopee_orders(array $orders, array $store, string $fulfillment):
     }
     $productBySku = [];
     if ($skus) {
-        $keys = array_keys($skus);
-        foreach (array_chunk($keys, 500) as $chunk) {
+        foreach (array_chunk(array_keys($skus), 500) as $chunk) {
             $in = implode(',', array_fill(0, count($chunk), '?'));
             foreach (q("SELECT * FROM products WHERE sku IN ($in)", $chunk) as $p) {
                 $productBySku[$p['sku']] = $p;
@@ -200,23 +203,31 @@ function import_shopee_orders(array $orders, array $store, string $fulfillment):
     }
 
     $adminPct = (float) $store['default_admin_fee_percent'];
-    $created = 0; $skipped = 0; $unmatched = [];
+    $created = 0; $skipped = 0; $nDrop = 0; $nSelf = 0; $partnerTotal = 0.0; $unmatched = [];
     $pdo = db();
 
     foreach ($orders as $o) {
-        $exists = scalar('SELECT id FROM orders WHERE store_id = ? AND external_no = ?',
-            [$storeId, $o['externalNo']]);
+        $no = $o['externalNo'];
+        $exists = scalar('SELECT id FROM orders WHERE store_id = ? AND external_no = ?', [$storeId, $no]);
         if ($exists) { $skipped++; continue; }
+
+        // Deteksi pemenuhan per pesanan.
+        $jak = $dropshipMap[$no] ?? null;
+        if ($jak) {
+            $ful = 'DROPSHIP';
+        } elseif ($hasJakmallReport) {
+            $ful = 'SELF';
+        } else {
+            $ful = $defaultFulfillment;
+        }
 
         $cogs = 0; $dropship = 0; $items = [];
         foreach ($o['items'] as $it) {
             $product = (!empty($it['sku']) && isset($productBySku[$it['sku']])) ? $productBySku[$it['sku']] : null;
             if (!empty($it['sku']) && !$product) $unmatched[$it['sku']] = true;
             $unitCost = $product ? (float) $product['cost_price'] : 0;
-            $cogs += $unitCost * $it['qty'];
-            if ($fulfillment === 'DROPSHIP' && $product) {
-                $dropship += (float) $product['dropship_cost'] * $it['qty'];
-            }
+            if ($ful === 'SELF') $cogs += $unitCost * $it['qty'];
+            elseif (!$jak && $product) $dropship += (float) $product['dropship_cost'] * $it['qty']; // fallback dropship tanpa laporan
             $items[] = [
                 'product_id' => $product['id'] ?? null,
                 'sku' => $it['sku'] ?: null,
@@ -226,8 +237,20 @@ function import_shopee_orders(array $orders, array $store, string $fulfillment):
                 'unit_cost' => $unitCost,
             ];
         }
-        // Untuk dropship, modal = biaya Jakmall, HPP stok sendiri tidak dihitung.
-        if ($fulfillment === 'DROPSHIP') $cogs = 0;
+
+        $note = $o['note'] ?? null;
+        if ($jak) {
+            // Modal dropship riil dari Jakmall (sudah termasuk biaya mitra).
+            $dropship = (float) $jak['total'];
+            $partnerTotal += (float) $jak['partnerFee'];
+            $note = 'Dropship Jakmall' . (!empty($jak['jakmallCode']) ? ' #' . $jak['jakmallCode'] : '') .
+                ': produk Rp' . number_format($jak['productCost'], 0, ',', '.') .
+                ' + mitra Rp' . number_format($jak['partnerFee'], 0, ',', '.') .
+                ($jak['additional'] > 0 ? ' + tambahan Rp' . number_format($jak['additional'], 0, ',', '.') : '') .
+                ' = Rp' . number_format($jak['total'], 0, ',', '.');
+            $note = mb_substr($note, 0, 500);
+        }
+        ($ful === 'DROPSHIP') ? $nDrop++ : $nSelf++;
 
         $revenue = $o['productRevenue'];
         $adminFee = ($o['adminFee'] ?? 0) > 0 ? $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
@@ -237,12 +260,12 @@ function import_shopee_orders(array $orders, array $store, string $fulfillment):
             exec_sql(
                 'INSERT INTO orders (store_id, external_no, marketplace, status, fulfillment, order_date,
                     buyer_name, product_revenue, shipping_charged_to_buyer, other_income, cogs, admin_fee,
-                    shipping_cost_seller, voucher_seller_borne, dropship_cost, other_cost)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                [$storeId, $o['externalNo'], $store['marketplace'], mp_map_status($o['status'] ?? ''), $fulfillment,
+                    shipping_cost_seller, voucher_seller_borne, dropship_cost, other_cost, note)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                [$storeId, $no, $store['marketplace'], mp_map_status($o['status'] ?? ''), $ful,
                     mp_parse_date($o['orderDate'] ?? null), ($o['buyerName'] ?? '') ?: null, $revenue,
                     $o['shippingChargedToBuyer'] ?? 0, $o['otherIncome'] ?? 0, $cogs, $adminFee,
-                    $o['shippingCostSeller'] ?? 0, $o['voucherSellerBorne'] ?? 0, $dropship, $o['otherCost'] ?? 0]
+                    $o['shippingCostSeller'] ?? 0, $o['voucherSellerBorne'] ?? 0, $dropship, $o['otherCost'] ?? 0, $note]
             );
             $orderId = (int) $pdo->lastInsertId();
             foreach ($items as $it) {
@@ -260,7 +283,8 @@ function import_shopee_orders(array $orders, array $store, string $fulfillment):
         }
     }
 
-    $msg = "Pesanan: $created baru, $skipped dilewati (duplikat).";
+    $msg = "Pesanan: $created baru ($nDrop dropship, $nSelf packing sendiri), $skipped dilewati (duplikat).";
+    if ($partnerTotal > 0) $msg .= ' Total biaya mitra Jakmall: Rp' . number_format($partnerTotal, 0, ',', '.') . '.';
     if ($unmatched) {
         $list = implode(', ', array_slice(array_keys($unmatched), 0, 8));
         $msg .= ' ⚠️ SKU tak ada di katalog (HPP 0): ' . $list .
@@ -280,11 +304,14 @@ function handle_import(): void
         return;
     }
 
-    $orderSources = []; $jakmall = []; $unknown = [];
+    $orderSources = []; $jakmall = []; $dropshipMap = []; $hasJakmallReport = false; $unknown = [];
     foreach ($uploads as $u) {
         $res = mp_read_file($u['tmp_name'], $u['name']);
         if ($res['type'] === 'jakmall') {
             foreach ($res['products'] as $p) $jakmall[$p['sku']] = $p; // dedup per SKU
+        } elseif ($res['type'] === 'jakmall_orders') {
+            $hasJakmallReport = true;
+            foreach ($res['dropship'] as $no => $info) $dropshipMap[$no] = $info;
         } elseif ($res['type'] === 'orders' && !empty($res['orders'])) {
             $orderSources[] = $res['orders'];
         } else {
@@ -297,6 +324,9 @@ function handle_import(): void
         [$ins, $upd] = import_jakmall_products(array_values($jakmall));
         $msgs[] = "Master produk Jakmall: $ins baru, $upd diperbarui.";
     }
+    if ($hasJakmallReport) {
+        $msgs[] = 'Laporan Pesanan Jakmall: ' . count($dropshipMap) . ' pesanan dropship terdeteksi.';
+    }
 
     if ($orderSources) {
         $store = q1('SELECT * FROM stores WHERE id = ?', [$storeId]);
@@ -305,13 +335,16 @@ function handle_import(): void
             return;
         }
         $orders = mp_merge_orders($orderSources);
-        $msgs[] = import_shopee_orders($orders, $store, $fulfillment);
+        $msgs[] = import_shopee_orders($orders, $store, $dropshipMap, $hasJakmallReport, $fulfillment);
+    } elseif ($hasJakmallReport && !$jakmall) {
+        // Hanya laporan Jakmall tanpa file pesanan: tak ada yang bisa diimpor.
+        $msgs[] = '(Belum ada file pesanan Shopee yang diunggah, jadi pesanan belum dibuat.)';
     }
 
-    if (!$jakmall && !$orderSources) {
+    if (!$jakmall && !$orderSources && !$hasJakmallReport) {
         $list = $unknown ? ' (' . implode(', ', $unknown) . ')' : '';
         flash('error', 'Format file tidak dikenali' . $list .
-            '. Didukung: Laporan Penghasilan & Order Shopee, Master Produk Jakmall, atau CSV pesanan.');
+            '. Didukung: Laporan Penghasilan & Order Shopee, Laporan Pesanan & Master Produk Jakmall, atau CSV pesanan.');
         return;
     }
     if ($unknown) $msgs[] = '⚠️ Dilewati (tak dikenali): ' . implode(', ', $unknown) . '.';

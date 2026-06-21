@@ -277,6 +277,41 @@ function mp_jakmall_products(array $assoc): array
     return $out;
 }
 
+// ---------- Adapter: Laporan Pesanan Jakmall (deteksi dropship + biaya) ----------
+// Kembalikan peta: No. Pesanan channel (Shopee) => biaya dropship Jakmall.
+// "Kode Invoice Channel" = nomor pesanan marketplace. Total Transaksi sudah
+// termasuk Biaya Mitra Jakmall + Biaya Tambahan. Satu pesanan channel bisa
+// punya >1 baris (digabung/dijumlahkan).
+function mp_jakmall_orders(array $assoc): array
+{
+    $map = [];
+    foreach ($assoc as $r) {
+        $inv = mp_pick($r, ['kode invoice channel']);
+        if (!$inv) continue;
+        $product = mp_num(mp_pick($r, ['total harga produk']));
+        $partner = mp_num(mp_pick($r, ['biaya mitra jakmall']));
+        $extra   = mp_num(mp_pick($r, ['biaya tambahan']));
+        $total   = mp_num(mp_pick($r, ['total transaksi']));
+        if ($total <= 0) $total = $product + $partner + $extra;
+        if (isset($map[$inv])) {
+            $map[$inv]['productCost'] += $product;
+            $map[$inv]['partnerFee']  += $partner;
+            $map[$inv]['additional']  += $extra;
+            $map[$inv]['total']       += $total;
+        } else {
+            $map[$inv] = [
+                'jakmallCode' => mp_pick($r, ['kode pesanan']),
+                'store'       => mp_pick($r, ['nama toko']),
+                'productCost' => $product,
+                'partnerFee'  => $partner,
+                'additional'  => $extra,
+                'total'       => $total,
+            ];
+        }
+    }
+    return $map;
+}
+
 // ---------- Adapter: Laporan Penghasilan Shopee (sheet Income + Seller Fee) ----------
 // Menghasilkan pesanan ternormalisasi dengan biaya yang sudah dipetakan ke
 // ember (admin/voucher/ongkir) dan SELISIH direkonsiliasi ke other_cost agar
@@ -356,7 +391,15 @@ function mp_read_file(string $path, string $origName = ''): array
     $sheets = xlsx_read($path);
     if (!$sheets) return ['type' => 'unknown'];
 
-    // 1) Master Produk Jakmall?
+    // 1) Laporan Pesanan Jakmall (deteksi dropship)?
+    foreach ($sheets as $rows) {
+        $hi = mp_header_index($rows, ['kode invoice channel', 'total transaksi'], 5);
+        if ($hi >= 0) {
+            return ['type' => 'jakmall_orders', 'dropship' => mp_jakmall_orders(mp_assoc_rows($rows, $hi)), 'source' => 'jakmall_orders'];
+        }
+    }
+
+    // 2) Master Produk Jakmall?
     foreach ($sheets as $rows) {
         $hi = mp_header_index($rows, ['kode sku', 'harga'], 5);
         if ($hi >= 0) {

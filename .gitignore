@@ -10,3 +10,6 @@ _*.csv
 .DS_Store
 Thumbs.db
 *.log
+
+# Setelan lokal Claude Code (bisa memuat kredensial) — jangan di-commit
+.claude/settings.local.json
