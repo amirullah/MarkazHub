@@ -189,3 +189,9 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 .radio-line input { margin-right: .4rem; }
 .btn-danger { background: var(--neg); color: #fff; }
 .btn-danger:hover { background: #b91c1c; }
+
+/* ---- Penanda 'belum ada file pesanan' ---- */
+.tag-need { color: #9a3412; background: #ffedd5; border: 1px solid #fed7aa; margin-top: .2rem; display: inline-block; }
+.chip-need { border-color: #fed7aa; color: #9a3412; }
+.chip-need:hover { background: #fff7ed; }
+.chip-need.active { background: #ea580c; color: #fff; border-color: #ea580c; }

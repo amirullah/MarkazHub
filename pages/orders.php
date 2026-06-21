@@ -2,6 +2,12 @@
 $mp = $_GET['mp'] ?? '';
 $storeFilter = (int) ($_GET['store'] ?? 0);
 $qstr = trim($_GET['q'] ?? '');
+$needFilter = ($_GET['need'] ?? '') === '1';
+
+// "Belum ada file pesanan" = tak punya item, atau ada item ber-qty asumsi
+// (artinya rincian dari Order Completed/Pesanan Selesai belum diimpor).
+$needSql = '((SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) = 0
+             OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.qty_assumed = 1))';
 
 $where = [];
 $params = [];
@@ -13,14 +19,18 @@ if ($qstr !== '') {
     $like = '%' . $qstr . '%';
     array_push($params, $like, $like, $like, $like);
 }
+if ($needFilter) { $where[] = $needSql; }
 $wsql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 // Pertahankan filter lain saat membuat tautan/aksi.
-$keep = array_filter(['mp' => $mp, 'store' => $storeFilter ?: '', 'q' => $qstr], fn($v) => $v !== '' && $v !== 0);
+$keep = array_filter(['mp' => $mp, 'store' => $storeFilter ?: '', 'q' => $qstr, 'need' => $needFilter ? '1' : ''], fn($v) => $v !== '' && $v !== 0);
 
 $orders = q("SELECT o.*, s.name AS store_name,
-            (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) AS item_count
+            (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) AS item_count,
+            (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id AND i.qty_assumed = 1) AS assumed_count
             FROM orders o JOIN stores s ON s.id = o.store_id
             $wsql ORDER BY o.order_date DESC LIMIT 300", $params);
+// Jumlah total pesanan yang belum ada file pesanannya (untuk badge filter).
+$needTotal = (int) scalar("SELECT COUNT(*) FROM orders o WHERE $needSql");
 $stores = q('SELECT id, name FROM stores ORDER BY name');
 $t = jumlah_laba($orders);
 
@@ -38,11 +48,15 @@ page_header('Pesanan', 'Semua pesanan beserta laba per pesanan.', $importBtn);
   <?php if ($qstr !== ''): ?><a class="btn btn-secondary" href="<?= e(url('orders', array_diff_key($keep, ['q' => 1]))) ?>">Reset</a><?php endif; ?>
 </form>
 
+<?php $carry = []; if ($qstr !== '') $carry['q'] = $qstr; if ($needFilter) $carry['need'] = '1'; ?>
 <div class="filters">
-  <a class="chip<?= (!$mp && !$storeFilter) ? ' active' : '' ?>" href="<?= e(url('orders', $qstr !== '' ? ['q' => $qstr] : [])) ?>">Semua</a>
+  <a class="chip<?= (!$mp && !$storeFilter) ? ' active' : '' ?>" href="<?= e(url('orders', $carry)) ?>">Semua</a>
   <?php foreach (MARKETPLACES as $m): ?>
-    <a class="chip<?= ($mp === $m && !$storeFilter) ? ' active' : '' ?>" href="<?= e(url('orders', array_merge(['mp' => $m], $qstr !== '' ? ['q' => $qstr] : []))) ?>"><?= e(MARKETPLACE_LABEL[$m]) ?></a>
+    <a class="chip<?= ($mp === $m && !$storeFilter) ? ' active' : '' ?>" href="<?= e(url('orders', array_merge(['mp' => $m], $carry))) ?>"><?= e(MARKETPLACE_LABEL[$m]) ?></a>
   <?php endforeach; ?>
+  <?php $needCarry = array_filter(['mp' => $mp, 'store' => $storeFilter ?: '', 'q' => $qstr], fn($v) => $v !== '' && $v !== 0); ?>
+  <a class="chip chip-need<?= $needFilter ? ' active' : '' ?>" href="<?= e(url('orders', $needFilter ? $needCarry : array_merge($needCarry, ['need' => '1']))) ?>"
+     title="Pesanan yang belum diimpor file Order Completed / Pesanan Selesai">📥 Belum ada file pesanan<?= $needTotal > 0 ? ' (' . $needTotal . ')' : '' ?></a>
   <?php if ($stores): ?>
     <form method="get" class="filter-form">
       <input type="hidden" name="p" value="orders">
@@ -84,6 +98,8 @@ page_header('Pesanan', 'Semua pesanan beserta laba per pesanan.', $importBtn);
       <tbody>
       <?php foreach ($orders as $o): $p = hitung_laba($o); ?>
         <tr>
+          <?php $needsFile = ((int)$o['item_count'] === 0) || ((int)$o['assumed_count'] > 0);
+                $fileLbl = $o['marketplace'] === 'SHOPEE' ? 'Order Completed' : 'Pesanan Selesai'; ?>
           <td><a class="link" href="<?= e(url('order_detail', ['id' => $o['id']])) ?>"><?= e($o['external_no']) ?></a>
             <div class="muted tiny"><?= (int)$o['item_count'] ?> item ·
               <?php if (!empty($o['income_verified'])): ?>
@@ -91,7 +107,11 @@ page_header('Pesanan', 'Semua pesanan beserta laba per pesanan.', $importBtn);
               <?php else: ?>
                 <span class="net-tag net-est" title="Laba estimasi: biaya admin dari persentase toko (belum ada Laporan Penghasilan)">≈ estimasi</span>
               <?php endif; ?>
-            </div></td>
+            </div>
+            <?php if ($needsFile): ?>
+              <div class="tiny"><span class="net-tag tag-need" title="Rincian produk/qty/HPP belum lengkap — impor file <?= e($fileLbl) ?> periode ini">📥 belum ada <?= e($fileLbl) ?></span></div>
+            <?php endif; ?>
+          </td>
           <td class="muted nowrap"><?= tanggal($o['order_date']) ?></td>
           <td><?= badge_marketplace($o['marketplace']) ?><div class="muted tiny"><?= e($o['store_name']) ?></div></td>
           <td class="muted tiny"><?= e(FULFILLMENT_LABEL[$o['fulfillment']]) ?></td>
