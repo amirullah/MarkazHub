@@ -28,7 +28,7 @@ $delBtn = '<form method="post" onsubmit="return confirm(\'Hapus pesanan ini perm
     . '<button class="link-danger">Hapus</button></form>';
 page_header('Pesanan ' . $order['external_no'],
     $order['store_name'] . ' · ' . tanggal($order['order_date']) . ($order['buyer_name'] ? ' · ' . $order['buyer_name'] : ''),
-    badge_marketplace($order['marketplace']) . ' ' . $delBtn);
+    badge_channel($order['marketplace']) . ' ' . $delBtn);
 ?>
 
 <div class="card table-wrap" style="margin-bottom:1.5rem">

@@ -17,7 +17,7 @@ page_header('Toko', 'Daftar toko di tiap marketplace. Satu marketplace boleh pun
           <?php foreach ($stores as $s): ?>
             <tr<?= $editId === (int)$s['id'] ? ' class="row-editing"' : '' ?>>
               <td class="bold"><?= e($s['name']) ?><?= !$s['active'] ? ' <span class="muted tiny">(nonaktif)</span>' : '' ?></td>
-              <td><?= badge_marketplace($s['marketplace']) ?></td>
+              <td><?= badge_channel($s['marketplace']) ?></td>
               <td class="right"><?= persen($s['default_admin_fee_percent']) ?></td>
               <td class="right"><?= (int)$s['order_count'] ?></td>
               <td class="right nowrap">
@@ -42,10 +42,16 @@ page_header('Toko', 'Daftar toko di tiap marketplace. Satu marketplace boleh pun
     <h2 class="card-title"><?= $edit ? '✏️ Edit Toko' : '➕ Tambah Toko' ?></h2>
     <div class="field"><label class="label">Nama Toko</label>
       <input name="name" class="input" placeholder="Toko Berkah Jaya" required value="<?= e($edit['name'] ?? '') ?>"></div>
-    <div class="field"><label class="label">Marketplace</label>
+    <div class="field"><label class="label">Channel</label>
+      <?php
+      // Tokopedia & TikTok digabung jadi satu pilihan; nilai marketplace kanonik
+      // 'TOKOPEDIA' mewakili channel gabungan.
+      $chanOpts = ['SHOPEE' => 'Shopee', 'TOKOPEDIA' => 'Tokopedia/TikTok'];
+      $editChan = isset($edit['marketplace']) ? (CHANNEL_OF[$edit['marketplace']] === 'SHOPEE' ? 'SHOPEE' : 'TOKOPEDIA') : 'SHOPEE';
+      ?>
       <select name="marketplace" class="input">
-        <?php foreach (MARKETPLACES as $m): ?>
-          <option value="<?= $m ?>" <?= ($edit['marketplace'] ?? '') === $m ? 'selected' : '' ?>><?= e(MARKETPLACE_LABEL[$m]) ?></option>
+        <?php foreach ($chanOpts as $val => $lbl): ?>
+          <option value="<?= $val ?>" <?= $editChan === $val ? 'selected' : '' ?>><?= e($lbl) ?></option>
         <?php endforeach; ?>
       </select>
     </div>
