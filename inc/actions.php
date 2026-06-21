@@ -203,7 +203,7 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
     }
 
     $adminPct = (float) $store['default_admin_fee_percent'];
-    $created = 0; $skipped = 0; $nDrop = 0; $nSelf = 0; $partnerTotal = 0.0; $unmatched = [];
+    $created = 0; $skipped = 0; $nDrop = 0; $nSelf = 0; $partnerTotal = 0.0; $unmatched = []; $selfNoHpp = 0; $selfNoSku = 0;
     $pdo = db();
 
     foreach ($orders as $o) {
@@ -250,7 +250,18 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
                 ' = Rp' . number_format($jak['total'], 0, ',', '.');
             $note = mb_substr($note, 0, 500);
         }
-        ($ful === 'DROPSHIP') ? $nDrop++ : $nSelf++;
+        if ($ful === 'DROPSHIP') {
+            $nDrop++;
+        } else {
+            $nSelf++;
+            if ($cogs == 0 && $items) {
+                $selfNoHpp++;
+                // Tak ada satu pun item ber-SKU -> kemungkinan file Order Completed belum diunggah.
+                $hasSku = false;
+                foreach ($items as $x) if (!empty($x['sku'])) { $hasSku = true; break; }
+                if (!$hasSku) $selfNoSku++;
+            }
+        }
 
         $revenue = $o['productRevenue'];
         $verified = !empty($o['_hasIncome']) ? 1 : 0; // laba dari Total Penghasilan riil?
@@ -286,9 +297,16 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
 
     $msg = "Pesanan: $created baru ($nDrop dropship, $nSelf packing sendiri), $skipped dilewati (duplikat).";
     if ($partnerTotal > 0) $msg .= ' Total biaya mitra Jakmall: Rp' . number_format($partnerTotal, 0, ',', '.') . '.';
+    if ($selfNoHpp > 0) {
+        $msg .= " ⚠️ $selfNoHpp pesanan packing-sendiri belum ber-HPP";
+        if ($selfNoSku > 0) {
+            $msg .= " ($selfNoSku tanpa SKU — sertakan file Order Completed periode yang sama agar SKU & HPP terbaca)";
+        }
+        $msg .= '.';
+    }
     if ($unmatched) {
         $list = implode(', ', array_slice(array_keys($unmatched), 0, 8));
-        $msg .= ' ⚠️ SKU tak ada di katalog (HPP 0): ' . $list .
+        $msg .= ' ⚠️ SKU belum ada di katalog (HPP 0): ' . $list .
             (count($unmatched) > 8 ? ', ...' : '') . '. Unggah Master Produk Jakmall lalu import ulang.';
     }
     return $msg;
