@@ -307,7 +307,14 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
 
         $revenue = (float) $o['productRevenue'];
         $verified = !empty($o['_hasIncome']) ? 1 : 0;
-        $adminFee = ($o['adminFee'] ?? 0) > 0 ? (float) $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
+        // Untuk pesanan ber-Income, pakai biaya admin apa adanya (boleh 0) — biaya
+        // sudah direkonsiliasi agar laba = Total Penghasilan; mengganti dgn estimasi
+        // persen akan merusak rekonsiliasi. Estimasi hanya untuk pesanan non-Income.
+        if ($verified) {
+            $adminFee = (float) ($o['adminFee'] ?? 0);
+        } else {
+            $adminFee = ($o['adminFee'] ?? 0) > 0 ? (float) $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
+        }
         $status = mp_map_status($o['status'] ?? '');
         $skuCount = 0; foreach ($items as $x) if (!empty($x['sku'])) $skuCount++;
 

@@ -420,9 +420,16 @@ function mp_read_file(string $path, string $origName = ''): array
     foreach ($sheets as $name => $rows) {
         $hi = mp_header_index($rows, ['no. pesanan', 'total penghasilan'], 12);
         if ($hi >= 0) {
+            // Cari sheet rincian produk berdasarkan ISI (punya kolom No. Pesanan
+            // + Nama Produk), bukan nama sheet — Shopee memakai nama berbeda
+            // ("Seller Fee", "Order Processing Fee", dll), dan ada sheet "fee"
+            // lain ("Service Fee Details") yang TIDAK memuat nama produk.
             $items = [];
             foreach ($sheets as $sn => $sr) {
-                if (stripos($sn, 'fee') !== false) { $items = mp_sellerfee_items($sr); break; }
+                if (mp_header_index($sr, ['no. pesanan', 'nama produk'], 8) >= 0) {
+                    $items = mp_sellerfee_items($sr);
+                    if ($items) break;
+                }
             }
             $orders = mp_income_to_orders(mp_assoc_rows($rows, $hi), $items);
             return ['type' => 'orders', 'orders' => array_values($orders), 'source' => 'shopee_income'];
