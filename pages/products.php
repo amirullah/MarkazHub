@@ -1,14 +1,39 @@
 <?php
-$products = q('SELECT p.*, s.name AS supplier_name FROM products p
+$qstr = trim($_GET['q'] ?? '');
+$LIMIT = 300;
+$total = (int) scalar('SELECT COUNT(*) FROM products WHERE active = 1');
+
+$cond = 'WHERE p.active = 1';
+$params = [];
+if ($qstr !== '') {
+    $cond .= ' AND (p.sku LIKE ? OR p.name LIKE ?)';
+    $params[] = '%' . $qstr . '%';
+    $params[] = '%' . $qstr . '%';
+}
+$products = q("SELECT p.*, s.name AS supplier_name FROM products p
                LEFT JOIN suppliers s ON s.id = p.supplier_id
-               WHERE p.active = 1 ORDER BY p.name');
+               $cond ORDER BY p.name LIMIT $LIMIT", $params);
 $suppliers = q('SELECT id, name, type FROM suppliers ORDER BY name');
 page_header('Produk & HPP', 'Katalog produk + modal (HPP) & biaya dropship Jakmall. SKU dipakai untuk mencocokkan saat import.');
 ?>
 <div class="layout-2-1">
   <div>
+    <form method="get" class="search-bar">
+      <input type="hidden" name="p" value="products">
+      <input type="search" name="q" class="input" value="<?= e($qstr) ?>"
+             placeholder="🔎 Cari SKU atau nama produk…" autocomplete="off">
+      <button class="btn btn-primary">Cari</button>
+      <?php if ($qstr !== ''): ?><a class="btn btn-secondary" href="<?= e(url('products')) ?>">Reset</a><?php endif; ?>
+    </form>
+    <p class="muted" style="margin:0 0 .75rem">
+      <?php if ($qstr !== ''): ?>
+        Hasil "<strong><?= e($qstr) ?></strong>": menampilkan <?= count($products) ?><?= count($products) >= $LIMIT ? '+ (dipersempit, ketik lebih spesifik)' : '' ?> dari <?= number_format($total, 0, ',', '.') ?> produk.
+      <?php else: ?>
+        Menampilkan <?= count($products) ?> dari <?= number_format($total, 0, ',', '.') ?> produk<?= $total > $LIMIT ? ' — gunakan pencarian untuk menemukan produk tertentu' : '' ?>.
+      <?php endif; ?>
+    </p>
     <?php if (count($products) === 0): ?>
-      <div class="card pad muted">Belum ada produk. Tambahkan agar HPP otomatis terisi saat import.</div>
+      <div class="card pad muted"><?= $qstr !== '' ? 'Tidak ada produk cocok dengan pencarian.' : 'Belum ada produk. Tambahkan agar HPP otomatis terisi saat import.' ?></div>
     <?php else: ?>
       <div class="card table-wrap">
         <table>

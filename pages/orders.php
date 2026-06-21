@@ -1,12 +1,21 @@
 <?php
 $mp = $_GET['mp'] ?? '';
 $storeFilter = (int) ($_GET['store'] ?? 0);
+$qstr = trim($_GET['q'] ?? '');
 
 $where = [];
 $params = [];
 if (in_array($mp, MARKETPLACES, true)) { $where[] = 'o.marketplace = ?'; $params[] = $mp; }
 if ($storeFilter > 0) { $where[] = 'o.store_id = ?'; $params[] = $storeFilter; }
+if ($qstr !== '') {
+    $where[] = '(o.external_no LIKE ? OR o.buyer_name LIKE ? OR EXISTS
+                (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND (i.sku LIKE ? OR i.name LIKE ?)))';
+    $like = '%' . $qstr . '%';
+    array_push($params, $like, $like, $like, $like);
+}
 $wsql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+// Pertahankan filter lain saat membuat tautan/aksi.
+$keep = array_filter(['mp' => $mp, 'store' => $storeFilter ?: '', 'q' => $qstr], fn($v) => $v !== '' && $v !== 0);
 
 $orders = q("SELECT o.*, s.name AS store_name,
             (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) AS item_count
@@ -19,14 +28,26 @@ $importBtn = '<a class="btn btn-primary" href="' . e(url('import')) . '">📥 Im
 page_header('Pesanan', 'Semua pesanan beserta laba per pesanan.', $importBtn);
 ?>
 
+<form method="get" class="search-bar">
+  <input type="hidden" name="p" value="orders">
+  <?php if ($mp !== ''): ?><input type="hidden" name="mp" value="<?= e($mp) ?>"><?php endif; ?>
+  <?php if ($storeFilter): ?><input type="hidden" name="store" value="<?= $storeFilter ?>"><?php endif; ?>
+  <input type="search" name="q" class="input" value="<?= e($qstr) ?>"
+         placeholder="🔎 Cari No. Pesanan, pembeli, SKU, atau nama produk…" autocomplete="off">
+  <button class="btn btn-primary">Cari</button>
+  <?php if ($qstr !== ''): ?><a class="btn btn-secondary" href="<?= e(url('orders', array_diff_key($keep, ['q' => 1]))) ?>">Reset</a><?php endif; ?>
+</form>
+
 <div class="filters">
-  <a class="chip<?= (!$mp && !$storeFilter) ? ' active' : '' ?>" href="<?= e(url('orders')) ?>">Semua</a>
+  <a class="chip<?= (!$mp && !$storeFilter) ? ' active' : '' ?>" href="<?= e(url('orders', $qstr !== '' ? ['q' => $qstr] : [])) ?>">Semua</a>
   <?php foreach (MARKETPLACES as $m): ?>
-    <a class="chip<?= ($mp === $m && !$storeFilter) ? ' active' : '' ?>" href="<?= e(url('orders', ['mp' => $m])) ?>"><?= e(MARKETPLACE_LABEL[$m]) ?></a>
+    <a class="chip<?= ($mp === $m && !$storeFilter) ? ' active' : '' ?>" href="<?= e(url('orders', array_merge(['mp' => $m], $qstr !== '' ? ['q' => $qstr] : []))) ?>"><?= e(MARKETPLACE_LABEL[$m]) ?></a>
   <?php endforeach; ?>
   <?php if ($stores): ?>
     <form method="get" class="filter-form">
       <input type="hidden" name="p" value="orders">
+      <?php if ($mp !== ''): ?><input type="hidden" name="mp" value="<?= e($mp) ?>"><?php endif; ?>
+      <?php if ($qstr !== ''): ?><input type="hidden" name="q" value="<?= e($qstr) ?>"><?php endif; ?>
       <select name="store" class="input" onchange="this.form.submit()">
         <option value="0">Semua toko</option>
         <?php foreach ($stores as $s): ?>
@@ -36,6 +57,9 @@ page_header('Pesanan', 'Semua pesanan beserta laba per pesanan.', $importBtn);
     </form>
   <?php endif; ?>
 </div>
+<?php if ($qstr !== ''): ?>
+  <p class="muted" style="margin:.25rem 0 1rem">Hasil pencarian "<strong><?= e($qstr) ?></strong>": <?= count($orders) ?> pesanan<?= count($orders) >= 300 ? ' (300 teratas)' : '' ?>.</p>
+<?php endif; ?>
 
 <?php if (count($orders) === 0): ?>
   <div class="empty">

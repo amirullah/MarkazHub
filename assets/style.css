@@ -174,3 +174,8 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 /* ---- Grup slot upload per marketplace ---- */
 .upload-group { margin-top: .9rem; }
 .upload-group-head { font-weight: 700; font-size: .82rem; color: var(--slate-700); margin-bottom: .4rem; padding-bottom: .25rem; border-bottom: 1px solid var(--slate-200); }
+
+/* ---- Kotak pencarian ---- */
+.search-bar { display: flex; gap: .5rem; margin-bottom: .75rem; }
+.search-bar .input { flex: 1; }
+.search-bar .btn { flex: 0 0 auto; }
