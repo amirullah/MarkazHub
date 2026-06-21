@@ -126,7 +126,7 @@ page_header('Pesanan ' . $order['external_no'],
       <?php if (!empty($order['income_verified'])): ?>
         <div class="net-note net-ok-bg">✓ Laba <strong>final</strong> dari <strong>Laporan Penghasilan</strong> — uang bersih riil setelah semua potongan marketplace.</div>
       <?php else: ?>
-        <div class="net-note net-est-bg">≈ <strong>Belum final.</strong> Biaya potongan marketplace (admin/komisi/layanan) belum ada karena <strong>Laporan Penghasilan</strong> pesanan ini belum diimpor — laba di bawah masih terlalu tinggi. Impor Laporan Penghasilan agar final.</div>
+        <div class="net-note net-est-bg">💰 <strong>Belum ada Laporan Penghasilan</strong> untuk pesanan ini, jadi biaya potongan marketplace (admin/komisi/layanan) belum dihitung — laba di bawah masih terlalu tinggi (belum final). Impor Laporan Penghasilan periode ini agar final.</div>
       <?php endif; ?>
       <div class="sum-row"><span class="muted">Pendapatan</span><span id="sum-rev">-</span></div>
       <div class="sum-row"><span class="muted">Total Biaya</span><span id="sum-cost" class="neg">-</span></div>

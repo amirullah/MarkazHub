@@ -113,9 +113,9 @@ $presets = [
     <a class="chip<?= $ch === $ck ? ' active' : '' ?>" href="<?= e(url('orders', array_merge($chCarry, ['ch' => $ck]))) ?>"><?= e($cl) ?></a>
   <?php endforeach; ?>
   <?php $needCarry = array_diff_key($carry, ['need' => 1, 'page' => 1]); ?>
-  <a class="chip chip-need<?= $needFilter ? ' active' : '' ?>" href="<?= e(url('orders', $needFilter ? $needCarry : array_merge($needCarry, ['need' => '1']))) ?>" title="Belum ada file Order Completed/Pesanan Selesai (item/SKU/qty kosong)">📥 Belum ada file pesanan</a>
+  <a class="chip chip-need<?= $needFilter ? ' active' : '' ?>" href="<?= e(url('orders', $needFilter ? $needCarry : array_merge($needCarry, ['need' => '1']))) ?>" title="File Pesanan (Order Completed/Pesanan Selesai) belum diimpor → produk/SKU/qty belum lengkap">📦 Belum ada file Pesanan</a>
   <?php $ufCarry = array_diff_key($carry, ['unfinal' => 1, 'page' => 1]); ?>
-  <a class="chip chip-need<?= $unfinalFilter ? ' active' : '' ?>" href="<?= e(url('orders', $unfinalFilter ? $ufCarry : array_merge($ufCarry, ['unfinal' => '1']))) ?>" title="Belum ada Laporan Penghasilan (biaya marketplace belum dihitung)">≈ Belum final</a>
+  <a class="chip chip-need<?= $unfinalFilter ? ' active' : '' ?>" href="<?= e(url('orders', $unfinalFilter ? $ufCarry : array_merge($ufCarry, ['unfinal' => '1']))) ?>" title="Laporan Penghasilan belum diimpor → biaya marketplace belum dihitung, laba belum final">💰 Belum ada Laporan Penghasilan</a>
 </div>
 
 <form method="get" class="filter-row">
@@ -177,10 +177,10 @@ $presets = [
           <td><a class="link" href="<?= e(url('order_detail', ['id' => $o['id']])) ?>"><?= e($o['external_no']) ?></a>
             <div class="muted tiny"><?= (int)$o['item_count'] ?> item<?php if (!$terminal): ?> ·
               <?= !empty($o['income_verified'])
-                ? '<span class="net-tag net-ok" title="Laba final dari Laporan Penghasilan (uang bersih riil)">✓ bersih</span>'
-                : '<span class="net-tag net-est" title="Laba belum final — biaya marketplace belum ada (impor Laporan Penghasilan)">≈ belum final</span>' ?>
+                ? '<span class="net-tag net-ok" title="Laba final dari Laporan Penghasilan (uang bersih riil)">✓ laba final</span>'
+                : '<span class="net-tag net-est" title="Laporan Penghasilan pesanan ini belum diimpor → biaya marketplace belum dihitung, laba belum final">💰 belum ada Laporan Penghasilan</span>' ?>
             <?php endif; ?></div>
-            <?php if ($needsFile && !$terminal && $o['status'] !== 'RETURNED'): ?><div class="tiny"><span class="net-tag tag-need" title="Impor file <?= e($fileLbl) ?> periode ini">📥 belum ada <?= e($fileLbl) ?></span></div><?php endif; ?>
+            <?php if ($needsFile && !$terminal && $o['status'] !== 'RETURNED'): ?><div class="tiny"><span class="net-tag tag-need" title="File Pesanan (<?= e($fileLbl) ?>) belum diimpor → produk/SKU/qty belum lengkap">📦 belum ada file Pesanan</span></div><?php endif; ?>
           </td>
           <td class="muted nowrap"><?= tanggal($o['order_date']) ?></td>
           <td><?= badge_channel($o['marketplace']) ?><div class="muted tiny"><?= e($o['store_name']) ?></div></td>
