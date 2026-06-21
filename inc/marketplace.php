@@ -332,6 +332,8 @@ function mp_income_to_orders(array $incomeAssoc, array $itemsByOrder = []): arra
 
         $revenue = mp_num(mp_pick($r, $C['productRevenue']));
         $net = mp_num(mp_pick($r, $C['totalIncome']));
+        // Lewati baris tanpa aktivitas uang (omzet & penghasilan dua-duanya 0).
+        if ($revenue == 0 && $net == 0) continue;
 
         $admin   = mp_abs_sum($r, $C['platformFees']);
         $voucher = mp_abs_sum($r, $C['sellerDiscounts']);
@@ -411,6 +413,9 @@ function mp_tiktok_income_to_orders(array $assoc): array
         if (!$no) continue;
         $revenue = mp_num(mp_pick($r, $C['revenue']));
         $net = mp_num(mp_pick($r, $C['net']));
+        // Lewati baris tanpa aktivitas uang (mis. pesanan yg dicairkan di periode
+        // lain) — kalau dibuat, jadi pesanan kosong Rp0 yang membingungkan.
+        if ($revenue == 0 && $net == 0) continue;
         $admin = abs(mp_num(mp_pick($r, $C['totalFees'])));
         $other = ($revenue - $net) - $admin; // rekonsiliasi
         $orders[$no] = [
