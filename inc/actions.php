@@ -539,6 +539,31 @@ function handle_clear_data(): void
     }
 }
 
+// Backfill: saat Laporan Pesanan Jakmall diimpor, tandai DROPSHIP + isi modal
+// (Total Transaksi Jakmall) pada pesanan LAMA yang cocok. Tanpa ini, laporan
+// Jakmall yang diunggah terpisah dari file pesanan tidak memperbaiki pesanan
+// yang sudah ada (dulu menyebabkan banyak pesanan dropship salah label SELF).
+function backfill_dropship(array $dropshipMap): int
+{
+    if (!$dropshipMap) return 0;
+    $n = 0;
+    foreach ($dropshipMap as $no => $jak) {
+        $note = mb_substr('Dropship Jakmall' . (!empty($jak['jakmallCode']) ? ' #' . $jak['jakmallCode'] : '') .
+            ': produk Rp' . number_format($jak['productCost'], 0, ',', '.') .
+            ' + mitra Rp' . number_format($jak['partnerFee'], 0, ',', '.') .
+            ($jak['additional'] > 0 ? ' + tambahan Rp' . number_format($jak['additional'], 0, ',', '.') : '') .
+            ' = Rp' . number_format($jak['total'], 0, ',', '.'), 0, 500);
+        // Hanya pesanan non-batal/retur; lewati yang sudah benar (idempoten).
+        $n += exec_sql(
+            "UPDATE orders SET fulfillment='DROPSHIP', dropship_cost=?, cogs=0, note=?
+             WHERE external_no=? AND status NOT IN ('CANCELLED','RETURNED')
+               AND (fulfillment<>'DROPSHIP' OR ABS(dropship_cost - ?) > 1)",
+            [$jak['total'], $note, $no, $jak['total']]
+        );
+    }
+    return $n;
+}
+
 function handle_import(): void
 {
     $storeId = (int) ($_POST['store_id'] ?? 0);
@@ -615,9 +640,6 @@ function handle_import(): void
         [$ins, $upd] = import_jakmall_products(array_values($jakmall));
         $msgs[] = "Master produk Jakmall: $ins baru, $upd diperbarui.";
     }
-    if ($hasJakmallReport) {
-        $msgs[] = 'Laporan Pesanan Jakmall: ' . count($dropshipMap) . ' pesanan dropship terdeteksi.';
-    }
 
     if ($orderSources) {
         if (!$store) {
@@ -633,8 +655,14 @@ function handle_import(): void
         // Pemenuhan: dropship dideteksi otomatis dari Laporan Pesanan Jakmall;
         // sisanya dianggap Packing Sendiri (default, tanpa perlu pilihan manual).
         $msgs[] = import_shopee_orders($orders, $store, $dropshipMap, $hasJakmallReport, 'SELF');
-    } elseif ($hasJakmallReport && !$jakmall && !$skipped) {
-        $msgs[] = '(Belum ada file pesanan yang diunggah, jadi pesanan belum dibuat.)';
+    }
+
+    // Laporan Pesanan Jakmall: backfill pesanan LAMA jadi DROPSHIP + modal Jakmall
+    // (berjalan walau file pesanan tak ikut diunggah).
+    if ($hasJakmallReport) {
+        $bf = backfill_dropship($dropshipMap);
+        $msgs[] = 'Laporan Pesanan Jakmall: ' . count($dropshipMap) . ' pesanan dropship di laporan' .
+            ($bf ? "; $bf pesanan diperbarui jadi Dropship (modal dari Jakmall)." : ' (semua sudah sesuai).');
     }
 
     $_SESSION['import_report'] = $report;
