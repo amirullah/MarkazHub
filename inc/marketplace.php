@@ -104,12 +104,6 @@ const MP_SHOPEE_INCOME = [
         'voucher co-fund disponsor oleh penjual', 'cashback koin disponsori penjual',
         'cashback koin co-fund disponsori penjual', 'promo gratis ongkir dari penjual',
     ],
-    // Komponen ongkir (bisa saling menutup, sisa negatif = ditanggung penjual).
-    'shippingComponents' => [
-        'diskon ongkir ditanggung jasa kirim', 'gratis ongkir dari shopee',
-        'ongkir yang diteruskan oleh shopee ke jasa kirim', 'ongkos kirim pengembalian barang',
-        'kembali ke biaya pengiriman pengirim', 'pengembalian biaya kirim',
-    ],
 ];
 
 // Baca file CSV menjadi array baris asosiatif (kunci sudah dinormalisasi).
@@ -259,17 +253,6 @@ function mp_abs_sum(array $row, array $candidates): float
     return $sum;
 }
 
-// Jumlahkan nilai bertanda (boleh + / -) dari beberapa kolom kandidat.
-function mp_signed_sum(array $row, array $candidates): float
-{
-    $sum = 0.0;
-    foreach ($candidates as $c) {
-        $k = mp_norm_key($c);
-        if (isset($row[$k]) && $row[$k] !== '') $sum += mp_num($row[$k]);
-    }
-    return $sum;
-}
-
 // ---------- Adapter: Master Produk Jakmall ----------
 // Kembalikan daftar produk [sku, name, cost] dari kolom Kode SKU / Nama / Harga.
 function mp_jakmall_products(array $assoc): array
@@ -345,12 +328,12 @@ function mp_income_to_orders(array $incomeAssoc, array $itemsByOrder = []): arra
 
         $admin   = mp_abs_sum($r, $C['platformFees']);
         $voucher = mp_abs_sum($r, $C['sellerDiscounts']);
-        $shipNet = mp_signed_sum($r, $C['shippingComponents']);
-        $shipSeller = $shipNet < 0 ? -$shipNet : 0.0;
-
-        // Rekonsiliasi: total potongan harus = revenue - net.
+        // Ongkir TIDAK dipecah terpisah: komponen ongkir (mis. "Ongkir Dibayar
+        // Pembeli" yang diteruskan ke kurir) bersifat pass-through dan sudah
+        // ternetto di "Total Penghasilan", jadi memecahnya hanya menimbulkan
+        // angka +/− yang saling meniadakan. Sisa potongan jatuh ke other.
         $totalDeduction = $revenue - $net;
-        $other = $totalDeduction - ($admin + $voucher + $shipSeller);
+        $other = $totalDeduction - ($admin + $voucher);
 
         // Item dari Seller Fee hanya punya nama (tanpa harga/qty/SKU). Untuk
         // pesanan 1 item, isi harga = omzet agar tidak tampil Rp0 (kasus umum).
@@ -368,7 +351,7 @@ function mp_income_to_orders(array $incomeAssoc, array $itemsByOrder = []): arra
             'buyerName'  => mp_pick($r, $C['buyerName']),
             'shippingChargedToBuyer' => mp_num(mp_pick($r, $C['shippingToBuyer'])),
             'adminFee'   => $admin,
-            'shippingCostSeller' => $shipSeller,
+            'shippingCostSeller' => 0.0,
             'voucherSellerBorne' => $voucher,
             'otherIncome' => 0.0,
             'otherCost'  => $other,
@@ -531,12 +514,18 @@ function mp_merge_orders(array $sources): array
             if (!isset($merged[$no])) { $merged[$no] = $o; continue; }
             $cur = $merged[$no];
 
-            // Item: pilih yang punya SKU (lebih kaya) atau yang lebih banyak.
+            // Item: pilih yang lebih kaya. Prioritas: ada SKU > ada ID Produk
+            // (bisa diresolusi ke SKU) > lebih banyak item.
             $oHasSku = mp_items_have_sku($o['items']);
             $curHasSku = mp_items_have_sku($cur['items']);
-            if (($oHasSku && !$curHasSku) ||
-                (!empty($o['items']) && count($o['items']) > count($cur['items']) && !$curHasSku)) {
+            if ($oHasSku && !$curHasSku) {
                 $cur['items'] = $o['items'];
+            } elseif (!$oHasSku && !$curHasSku && !empty($o['items'])) {
+                $oHasId = mp_items_have_shopeeId($o['items']);
+                $curHasId = mp_items_have_shopeeId($cur['items']);
+                if (($oHasId && !$curHasId) || count($o['items']) > count($cur['items'])) {
+                    $cur['items'] = $o['items'];
+                }
             }
 
             // Finansial: sumber dengan Income menang.
@@ -560,6 +549,14 @@ function mp_items_have_sku(array $items): bool
 {
     foreach ($items as $it) {
         if (!empty($it['sku'])) return true;
+    }
+    return false;
+}
+
+function mp_items_have_shopeeId(array $items): bool
+{
+    foreach ($items as $it) {
+        if (!empty($it['shopeeId'])) return true;
     }
     return false;
 }

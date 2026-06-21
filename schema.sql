@@ -8,6 +8,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS product_marketplace_ids;
 DROP TABLE IF EXISTS products;
 DROP TABLE IF EXISTS suppliers;
 DROP TABLE IF EXISTS stores;
