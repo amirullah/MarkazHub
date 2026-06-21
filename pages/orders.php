@@ -21,8 +21,9 @@ $sort = isset($_GET['sort'], $sortMap[$_GET['sort']]) ? $_GET['sort'] : 'date';
 $dir  = strtolower($_GET['dir'] ?? 'desc') === 'asc' ? 'ASC' : 'DESC';
 $orderBy = $sortMap[$sort] . ' ' . $dir . ', o.id ' . $dir;
 
-$needSql = '((SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) = 0
-             OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.qty_assumed = 1))';
+$needSql = "(o.status NOT IN ('CANCELLED','RETURNED') AND
+             ((SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) = 0
+              OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.qty_assumed = 1)))";
 
 $where = []; $params = [];
 if (isset(CHANNEL_MARKETPLACES[$ch])) {
@@ -165,13 +166,14 @@ $presets = [
         $needsFile = ((int)$o['item_count'] === 0) || ((int)$o['assumed_count'] > 0);
         $fileLbl = $o['marketplace'] === 'SHOPEE' ? 'Order Completed' : 'Pesanan Selesai'; ?>
         <tr>
+          <?php $terminal = in_array($o['status'], ['CANCELLED'], true); ?>
           <td><a class="link" href="<?= e(url('order_detail', ['id' => $o['id']])) ?>"><?= e($o['external_no']) ?></a>
-            <div class="muted tiny"><?= (int)$o['item_count'] ?> item ·
+            <div class="muted tiny"><?= (int)$o['item_count'] ?> item<?php if (!$terminal): ?> ·
               <?= !empty($o['income_verified'])
                 ? '<span class="net-tag net-ok" title="Laba final dari Laporan Penghasilan (uang bersih riil)">✓ bersih</span>'
                 : '<span class="net-tag net-est" title="Laba belum final — biaya marketplace belum ada (impor Laporan Penghasilan)">≈ belum final</span>' ?>
-            </div>
-            <?php if ($needsFile): ?><div class="tiny"><span class="net-tag tag-need" title="Impor file <?= e($fileLbl) ?> periode ini">📥 belum ada <?= e($fileLbl) ?></span></div><?php endif; ?>
+            <?php endif; ?></div>
+            <?php if ($needsFile && !$terminal && $o['status'] !== 'RETURNED'): ?><div class="tiny"><span class="net-tag tag-need" title="Impor file <?= e($fileLbl) ?> periode ini">📥 belum ada <?= e($fileLbl) ?></span></div><?php endif; ?>
           </td>
           <td class="muted nowrap"><?= tanggal($o['order_date']) ?></td>
           <td><?= badge_channel($o['marketplace']) ?><div class="muted tiny"><?= e($o['store_name']) ?></div></td>
