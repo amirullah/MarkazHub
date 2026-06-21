@@ -395,6 +395,12 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
             $revenue = 0.0; $adminFee = 0.0; $cogs = 0.0; $dropship = 0.0;
             $o['voucherSellerBorne'] = 0; $o['shippingCostSeller'] = 0; $o['otherCost'] = 0; $o['otherIncome'] = 0;
         }
+        // Pesanan DIKEMBALIKAN (retur): barang kembali ke penjual → modal TIDAK
+        // hilang. HPP & dropship tidak dihitung sebagai rugi; laba = hasil settlement
+        // (umumnya 0 utk refund penuh, atau minus bila ada biaya yg tak dikembalikan).
+        if ($status === 'RETURNED') {
+            $cogs = 0.0; $dropship = 0.0;
+        }
         $skuCount = 0; $hasAssumed = false;
         foreach ($items as $x) { if (!empty($x['sku'])) $skuCount++; if ($x['qty_assumed']) $hasAssumed = true; }
         if ($hasAssumed) $qtyAssumedN++;
