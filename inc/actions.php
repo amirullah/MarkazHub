@@ -175,6 +175,37 @@ function import_jakmall_products(array $products): array
     return [$ins, $upd];
 }
 
+// Ubah baris pesanan DB (+ itemnya) ke bentuk ternormalisasi $o, supaya bisa
+// digabung-ulang dengan data import baru lewat mp_merge_orders.
+function order_row_to_norm(array $ex, array $exItems): array
+{
+    $items = [];
+    foreach ($exItems as $it) {
+        $items[] = [
+            'sku'       => $it['sku'] ?: null,
+            'name'      => $it['name'],
+            'qty'       => (int) $it['qty'],
+            'unitPrice' => (float) $it['unit_price'],
+        ];
+    }
+    return [
+        'externalNo' => $ex['external_no'],
+        'orderDate'  => $ex['order_date'],
+        'status'     => $ex['status'],
+        'buyerName'  => $ex['buyer_name'],
+        'shippingChargedToBuyer' => (float) $ex['shipping_charged_to_buyer'],
+        'adminFee'   => (float) $ex['admin_fee'],
+        'shippingCostSeller' => (float) $ex['shipping_cost_seller'],
+        'voucherSellerBorne' => (float) $ex['voucher_seller_borne'],
+        'otherIncome' => (float) $ex['other_income'],
+        'otherCost'  => (float) $ex['other_cost'],
+        'productRevenue' => (float) $ex['product_revenue'],
+        'items'      => $items,
+        'note'       => $ex['note'],
+        '_hasIncome' => ((int) $ex['income_verified']) === 1,
+    ];
+}
+
 // Masukkan pesanan ternormalisasi (hasil merge) ke DB. Jenis pemenuhan
 // dideteksi per pesanan: bila No. Pesanan ada di Laporan Pesanan Jakmall
 // ($dropshipMap) -> DROPSHIP (modal = Total Transaksi Jakmall, termasuk biaya
@@ -185,13 +216,19 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
     if (!$orders) return 'Tidak ada pesanan terbaca dari file pesanan.';
     $storeId = (int) $store['id'];
 
-    // Peta SKU -> produk (untuk HPP otomatis), termasuk hasil upsert Jakmall.
-    $skus = [];
+    // Pass 1: gabungkan tiap pesanan import dengan pesanan lama di DB (yang lebih
+    // kaya menang), LALU kumpulkan SKU dari hasil gabungan — penting karena item
+    // ber-SKU bisa berasal dari data lama saat file yang diimpor kini tak punya SKU.
+    $prepared = []; $skus = [];
     foreach ($orders as $o) {
-        foreach ($o['items'] as $it) {
-            if (!empty($it['sku'])) $skus[$it['sku']] = true;
-        }
+        $ex = q1('SELECT * FROM orders WHERE store_id = ? AND external_no = ?', [$storeId, $o['externalNo']]);
+        $exItems = $ex ? q('SELECT * FROM order_items WHERE order_id = ?', [$ex['id']]) : [];
+        if ($ex) $o = mp_merge_orders([[order_row_to_norm($ex, $exItems)], [$o]])[0];
+        foreach ($o['items'] as $it) if (!empty($it['sku'])) $skus[$it['sku']] = true;
+        $prepared[] = ['ex' => $ex, 'exItems' => $exItems, 'o' => $o];
     }
+
+    // Peta SKU -> produk (katalog terkini, mis. dari Master Produk Jakmall).
     $productBySku = [];
     if ($skus) {
         foreach (array_chunk(array_keys($skus), 500) as $chunk) {
@@ -203,31 +240,37 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
     }
 
     $adminPct = (float) $store['default_admin_fee_percent'];
-    $created = 0; $skipped = 0; $nDrop = 0; $nSelf = 0; $partnerTotal = 0.0; $unmatched = []; $selfNoHpp = 0; $selfNoSku = 0;
+    $created = 0; $updated = 0; $unchanged = 0; $failed = 0;
+    $nDrop = 0; $nSelf = 0; $partnerTotal = 0.0; $unmatched = []; $selfNoHpp = 0; $selfNoSku = 0;
     $pdo = db();
+    $r = fn($v) => (int) round((float) $v);
 
-    foreach ($orders as $o) {
+    // Pass 2: hitung & tulis.
+    foreach ($prepared as $pp) {
+        $ex = $pp['ex']; $exItems = $pp['exItems']; $o = $pp['o'];
         $no = $o['externalNo'];
-        $exists = scalar('SELECT id FROM orders WHERE store_id = ? AND external_no = ?', [$storeId, $no]);
-        if ($exists) { $skipped++; continue; }
 
-        // Deteksi pemenuhan per pesanan.
+        // Deteksi pemenuhan per pesanan (jangan turunkan DROPSHIP yang sudah pasti).
         $jak = $dropshipMap[$no] ?? null;
         if ($jak) {
             $ful = 'DROPSHIP';
+        } elseif ($ex && $ex['fulfillment'] === 'DROPSHIP') {
+            $ful = 'DROPSHIP';
         } elseif ($hasJakmallReport) {
             $ful = 'SELF';
+        } elseif ($ex) {
+            $ful = $ex['fulfillment'];
         } else {
             $ful = $defaultFulfillment;
         }
 
-        $cogs = 0; $dropship = 0; $items = [];
+        // Bangun item + HPP (cogs) dari katalog terkini.
+        $cogs = 0; $items = [];
         foreach ($o['items'] as $it) {
             $product = (!empty($it['sku']) && isset($productBySku[$it['sku']])) ? $productBySku[$it['sku']] : null;
             if (!empty($it['sku']) && !$product) $unmatched[$it['sku']] = true;
             $unitCost = $product ? (float) $product['cost_price'] : 0;
             if ($ful === 'SELF') $cogs += $unitCost * $it['qty'];
-            elseif (!$jak && $product) $dropship += (float) $product['dropship_cost'] * $it['qty']; // fallback dropship tanpa laporan
             $items[] = [
                 'product_id' => $product['id'] ?? null,
                 'sku' => $it['sku'] ?: null,
@@ -238,48 +281,86 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
             ];
         }
 
-        $note = $o['note'] ?? null;
-        if ($jak) {
-            // Modal dropship riil dari Jakmall (sudah termasuk biaya mitra).
-            $dropship = (float) $jak['total'];
-            $partnerTotal += (float) $jak['partnerFee'];
-            $note = 'Dropship Jakmall' . (!empty($jak['jakmallCode']) ? ' #' . $jak['jakmallCode'] : '') .
-                ': produk Rp' . number_format($jak['productCost'], 0, ',', '.') .
-                ' + mitra Rp' . number_format($jak['partnerFee'], 0, ',', '.') .
-                ($jak['additional'] > 0 ? ' + tambahan Rp' . number_format($jak['additional'], 0, ',', '.') : '') .
-                ' = Rp' . number_format($jak['total'], 0, ',', '.');
-            $note = mb_substr($note, 0, 500);
+        // Biaya dropship: dari Jakmall (riil) bila ada; pertahankan yang lama bila
+        // sudah dropship tanpa laporan baru; fallback master untuk dropship baru.
+        $dropship = 0; $note = $o['note'] ?? null;
+        if ($ful === 'DROPSHIP') {
+            $cogs = 0;
+            if ($jak) {
+                $dropship = (float) $jak['total'];
+                $partnerTotal += (float) $jak['partnerFee'];
+                $note = mb_substr('Dropship Jakmall' . (!empty($jak['jakmallCode']) ? ' #' . $jak['jakmallCode'] : '') .
+                    ': produk Rp' . number_format($jak['productCost'], 0, ',', '.') .
+                    ' + mitra Rp' . number_format($jak['partnerFee'], 0, ',', '.') .
+                    ($jak['additional'] > 0 ? ' + tambahan Rp' . number_format($jak['additional'], 0, ',', '.') : '') .
+                    ' = Rp' . number_format($jak['total'], 0, ',', '.'), 0, 500);
+            } elseif ($ex && $ex['fulfillment'] === 'DROPSHIP') {
+                $dropship = (float) $ex['dropship_cost']; // pertahankan biaya Jakmall sebelumnya
+                $note = $ex['note'];
+            } else {
+                foreach ($o['items'] as $it) {
+                    $p = (!empty($it['sku']) && isset($productBySku[$it['sku']])) ? $productBySku[$it['sku']] : null;
+                    if ($p) $dropship += (float) $p['dropship_cost'] * $it['qty'];
+                }
+            }
         }
+
+        $revenue = (float) $o['productRevenue'];
+        $verified = !empty($o['_hasIncome']) ? 1 : 0;
+        $adminFee = ($o['adminFee'] ?? 0) > 0 ? (float) $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
+        $status = mp_map_status($o['status'] ?? '');
+        $skuCount = 0; foreach ($items as $x) if (!empty($x['sku'])) $skuCount++;
+
+        // Statistik pemenuhan & HPP (atas keadaan final, semua pesanan diproses).
         if ($ful === 'DROPSHIP') {
             $nDrop++;
         } else {
             $nSelf++;
             if ($cogs == 0 && $items) {
                 $selfNoHpp++;
-                // Tak ada satu pun item ber-SKU -> kemungkinan file Order Completed belum diunggah.
-                $hasSku = false;
-                foreach ($items as $x) if (!empty($x['sku'])) { $hasSku = true; break; }
-                if (!$hasSku) $selfNoSku++;
+                if ($skuCount === 0) $selfNoSku++;
             }
         }
 
-        $revenue = $o['productRevenue'];
-        $verified = !empty($o['_hasIncome']) ? 1 : 0; // laba dari Total Penghasilan riil?
-        $adminFee = ($o['adminFee'] ?? 0) > 0 ? $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
+        // Deteksi perubahan supaya re-import tanpa data baru = tidak diutak-atik.
+        if ($ex) {
+            $exSkuCount = 0; foreach ($exItems as $x) if (!empty($x['sku'])) $exSkuCount++;
+            $same = $ex['fulfillment'] === $ful && (int) $ex['income_verified'] === $verified
+                && $ex['status'] === $status
+                && $r($ex['product_revenue']) === $r($revenue) && $r($ex['admin_fee']) === $r($adminFee)
+                && $r($ex['cogs']) === $r($cogs) && $r($ex['dropship_cost']) === $r($dropship)
+                && $r($ex['other_cost']) === $r($o['otherCost'] ?? 0) && $r($ex['voucher_seller_borne']) === $r($o['voucherSellerBorne'] ?? 0)
+                && count($exItems) === count($items) && $exSkuCount === $skuCount;
+            if ($same) { $unchanged++; continue; }
+        }
 
         $pdo->beginTransaction();
         try {
-            exec_sql(
-                'INSERT INTO orders (store_id, external_no, marketplace, status, fulfillment, order_date,
-                    buyer_name, product_revenue, shipping_charged_to_buyer, other_income, cogs, admin_fee,
-                    shipping_cost_seller, voucher_seller_borne, dropship_cost, other_cost, income_verified, note)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                [$storeId, $no, $store['marketplace'], mp_map_status($o['status'] ?? ''), $ful,
-                    mp_parse_date($o['orderDate'] ?? null), ($o['buyerName'] ?? '') ?: null, $revenue,
-                    $o['shippingChargedToBuyer'] ?? 0, $o['otherIncome'] ?? 0, $cogs, $adminFee,
-                    $o['shippingCostSeller'] ?? 0, $o['voucherSellerBorne'] ?? 0, $dropship, $o['otherCost'] ?? 0, $verified, $note]
-            );
-            $orderId = (int) $pdo->lastInsertId();
+            if ($ex) {
+                exec_sql(
+                    'UPDATE orders SET status=?, fulfillment=?, order_date=?, buyer_name=?, product_revenue=?,
+                        shipping_charged_to_buyer=?, other_income=?, cogs=?, admin_fee=?, shipping_cost_seller=?,
+                        voucher_seller_borne=?, dropship_cost=?, other_cost=?, income_verified=?, note=? WHERE id=?',
+                    [$status, $ful, mp_parse_date($o['orderDate'] ?? null), ($o['buyerName'] ?? '') ?: null, $revenue,
+                        $o['shippingChargedToBuyer'] ?? 0, $o['otherIncome'] ?? 0, $cogs, $adminFee,
+                        $o['shippingCostSeller'] ?? 0, $o['voucherSellerBorne'] ?? 0, $dropship, $o['otherCost'] ?? 0,
+                        $verified, $note, $ex['id']]
+                );
+                exec_sql('DELETE FROM order_items WHERE order_id = ?', [$ex['id']]);
+                $orderId = (int) $ex['id'];
+            } else {
+                exec_sql(
+                    'INSERT INTO orders (store_id, external_no, marketplace, status, fulfillment, order_date,
+                        buyer_name, product_revenue, shipping_charged_to_buyer, other_income, cogs, admin_fee,
+                        shipping_cost_seller, voucher_seller_borne, dropship_cost, other_cost, income_verified, note)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                    [$storeId, $no, $store['marketplace'], $status, $ful,
+                        mp_parse_date($o['orderDate'] ?? null), ($o['buyerName'] ?? '') ?: null, $revenue,
+                        $o['shippingChargedToBuyer'] ?? 0, $o['otherIncome'] ?? 0, $cogs, $adminFee,
+                        $o['shippingCostSeller'] ?? 0, $o['voucherSellerBorne'] ?? 0, $dropship, $o['otherCost'] ?? 0, $verified, $note]
+                );
+                $orderId = (int) $pdo->lastInsertId();
+            }
             foreach ($items as $it) {
                 exec_sql(
                     'INSERT INTO order_items (order_id, product_id, sku, name, qty, unit_price, unit_cost)
@@ -288,14 +369,15 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
                 );
             }
             $pdo->commit();
-            $created++;
+            $ex ? $updated++ : $created++;
         } catch (PDOException $e) {
             $pdo->rollBack();
-            $skipped++;
+            $failed++;
         }
     }
 
-    $msg = "Pesanan: $created baru ($nDrop dropship, $nSelf packing sendiri), $skipped dilewati (duplikat).";
+    $msg = "Pesanan: $created baru, $updated diperbarui, $unchanged tetap" . ($failed ? ", $failed gagal" : '') .
+        ". ($nDrop dropship, $nSelf packing sendiri.)";
     if ($partnerTotal > 0) $msg .= ' Total biaya mitra Jakmall: Rp' . number_format($partnerTotal, 0, ',', '.') . '.';
     if ($selfNoHpp > 0) {
         $msg .= " ⚠️ $selfNoHpp pesanan packing-sendiri belum ber-HPP";
