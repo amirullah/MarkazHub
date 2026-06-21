@@ -194,6 +194,13 @@ function mp_map_status(?string $raw): string
 function mp_parse_date(?string $raw): string
 {
     if (!$raw) return date('Y-m-d H:i:s');
+    $raw = trim($raw);
+    // Tokopedia/TikTok & Jakmall menulis tanggal DD/MM/YYYY. strtotime menganggap
+    // garis miring = M/D/Y (gaya AS), jadi salah baca. Ubah dulu ke Y-M-D.
+    // (Format Y/M/D "2026/06/17" dan ISO "2026-06-14" tidak ikut terpola.)
+    if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})(.*)$#', $raw, $m)) {
+        $raw = sprintf('%04d-%02d-%02d%s', (int) $m[3], (int) $m[2], (int) $m[1], $m[4]);
+    }
     $ts = strtotime($raw);
     return $ts ? date('Y-m-d H:i:s', $ts) : date('Y-m-d H:i:s');
 }
