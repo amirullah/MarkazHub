@@ -336,6 +336,15 @@ function mp_income_to_orders(array $incomeAssoc, array $itemsByOrder = []): arra
         $totalDeduction = $revenue - $net;
         $other = $totalDeduction - ($admin + $voucher + $shipSeller);
 
+        // Item dari Seller Fee hanya punya nama (tanpa harga/qty/SKU). Untuk
+        // pesanan 1 item, isi harga = omzet agar tidak tampil Rp0 (kasus umum).
+        // Detail lengkap (qty/SKU/harga per item) menyusul bila file Order
+        // Completed diimpor untuk periode yang sama (lihat mp_merge_orders).
+        $its = $itemsByOrder[$no] ?? [];
+        if (count($its) === 1 && (float) $its[0]['unitPrice'] === 0.0) {
+            $its[0]['unitPrice'] = $revenue;
+        }
+
         $orders[$no] = [
             'externalNo' => $no,
             'orderDate'  => mp_pick($r, $C['orderDate']),
@@ -348,7 +357,7 @@ function mp_income_to_orders(array $incomeAssoc, array $itemsByOrder = []): arra
             'otherIncome' => 0.0,
             'otherCost'  => $other,
             'productRevenue' => $revenue,
-            'items'      => $itemsByOrder[$no] ?? [],
+            'items'      => $its,
             '_hasIncome' => true,
         ];
     }
