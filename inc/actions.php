@@ -542,22 +542,27 @@ function handle_clear_data(): void
 // Backfill HPP: saat Master Produk Jakmall diimpor, hitung ulang modal (cogs)
 // pesanan SELF yang sudah ada dari katalog terkini. Tanpa ini, file pesanan yang
 // diimpor SEBELUM master tetap ber-HPP 0 (modal tak terhitung -> laba overstate).
+// HISTORI HARGA: backfill HANYA mengisi HPP yang masih KOSONG (unit_cost/cogs=0).
+// HPP pesanan lama yang sudah terisi TIDAK ditimpa — supaya laporan lama tetap
+// memakai harga modal saat itu walau master baru berisi harga berbeda.
 function backfill_hpp(): int
 {
     $cond = "o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF'";
     $before = (int) scalar("SELECT COUNT(*) FROM orders o WHERE $cond AND o.cogs=0");
-    // Isi unit_cost item SELF dari katalog (SKU yang cocok), lalu hitung ulang cogs.
+    // Isi unit_cost item yang masih 0 saja (jangan timpa yang sudah ada).
     exec_sql(
         "UPDATE order_items i
          JOIN orders o ON o.id = i.order_id
          JOIN products p ON p.sku = i.sku
          SET i.unit_cost = p.cost_price
-         WHERE o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF'"
+         WHERE o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF'
+           AND (i.unit_cost = 0 OR i.unit_cost IS NULL)"
     );
+    // Hitung ulang cogs HANYA pesanan SELF yang cogs-nya masih 0.
     exec_sql(
         "UPDATE orders o
          SET o.cogs = COALESCE((SELECT SUM(i.unit_cost*i.qty) FROM order_items i WHERE i.order_id=o.id), 0)
-         WHERE o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF'"
+         WHERE o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF' AND o.cogs = 0"
     );
     $after = (int) scalar("SELECT COUNT(*) FROM orders o WHERE $cond AND o.cogs=0");
     return max(0, $before - $after); // jumlah pesanan SELF yang kini ber-HPP
