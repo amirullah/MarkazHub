@@ -21,7 +21,32 @@ $groups = [
         ['Laporan Pesanan Jakmall', '.xlsx', 'Deteksi pesanan dropship + biaya mitra Jakmall.', 'LaporanPesanan-23032026-20062026.xlsx'],
     ]],
 ];
+$importReport = $_SESSION['import_report'] ?? null;
+unset($_SESSION['import_report']);
 ?>
+<?php if ($importReport): ?>
+  <?php $okN = count(array_filter($importReport, fn($r) => $r['ok'])); $failN = count($importReport) - $okN; ?>
+  <div class="card pad import-report">
+    <div class="report-head">📋 Hasil import per file — <span class="rep-ok-txt"><?= $okN ?> berhasil</span><?php if ($failN): ?>, <span class="rep-fail-txt"><?= $failN ?> gagal</span><?php endif; ?></div>
+    <table class="report-table">
+      <tbody>
+      <?php foreach ($importReport as $r): ?>
+        <tr class="<?= $r['ok'] ? 'rep-ok' : 'rep-fail' ?>">
+          <td class="rep-icon"><?= $r['ok'] ? '✅' : '❌' ?></td>
+          <td class="rep-name"><?= e($r['name']) ?></td>
+          <td class="rep-info">
+            <?php if ($r['ok']): ?>
+              <span class="rep-type"><?= e($r['type']) ?></span> · <span class="muted"><?= e($r['detail'] ?? '') ?></span>
+            <?php else: ?>
+              <span class="rep-reason"><?= e($r['reason']) ?></span>
+            <?php endif; ?>
+          </td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+<?php endif; ?>
 <div class="two-col">
   <div class="card pad">
     <?php if (count($stores) === 0): ?>

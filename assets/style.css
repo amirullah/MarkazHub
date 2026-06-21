@@ -221,3 +221,16 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 /* ---- Contoh nama file di slot upload ---- */
 .upload-eg { margin-top: .25rem; }
 .upload-eg code { background: var(--slate-100); padding: .05rem .3rem; border-radius: .25rem; font-size: .72rem; color: var(--slate-700); word-break: break-all; }
+
+/* ---- Laporan import per file ---- */
+.import-report { margin-bottom: 1rem; }
+.report-head { font-weight: 600; margin-bottom: .6rem; }
+.rep-ok-txt { color: #047857; } .rep-fail-txt { color: #b91c1c; }
+.report-table { width: 100%; border-collapse: collapse; }
+.report-table td { padding: .4rem .5rem; border-top: 1px solid var(--slate-100); vertical-align: top; font-size: .85rem; }
+.report-table tr:first-child td { border-top: 0; }
+.report-table .rep-icon { width: 1.5rem; }
+.report-table .rep-name { font-family: ui-monospace, monospace; font-size: .78rem; word-break: break-all; max-width: 230px; }
+.rep-type { font-weight: 600; }
+.rep-fail .rep-name { color: #b91c1c; }
+.rep-reason { color: #b45309; }

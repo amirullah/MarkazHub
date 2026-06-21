@@ -550,20 +550,42 @@ function handle_import(): void
         return;
     }
 
+    // Label jenis file dari hasil deteksi isi (mp_read_file 'source').
+    $srcLabel = [
+        'shopee_income'  => 'Laporan Penghasilan Shopee',
+        'shopee_order'   => 'Order Completed Shopee',
+        'tiktok_income'  => 'Laporan Penghasilan Tokopedia/TikTok',
+        'csv'            => 'Pesanan Selesai Tokopedia/TikTok',
+        'jakmall'        => 'Master Produk Jakmall',
+        'jakmall_orders' => 'Laporan Pesanan Jakmall',
+        'generic_xlsx'   => 'File pesanan',
+    ];
+
+    // Laporan status per file (ditampilkan di halaman Import setelah submit).
+    $report = [];
     $orderSources = []; $orderFiles = []; $jakmall = []; $dropshipMap = []; $hasJakmallReport = false; $unknown = [];
     foreach ($uploads as $u) {
         $res = mp_read_file($u['tmp_name'], $u['name']);
         $name = $u['name'] ?: '(tanpa nama)';
+        $label = $srcLabel[$res['source'] ?? ''] ?? 'File';
         if ($res['type'] === 'jakmall') {
             foreach ($res['products'] as $p) $jakmall[$p['sku']] = $p; // dedup per SKU
+            $report[] = ['name' => $name, 'ok' => true, 'type' => $label, 'detail' => count($res['products']) . ' produk'];
         } elseif ($res['type'] === 'jakmall_orders') {
             $hasJakmallReport = true;
             foreach ($res['dropship'] as $no => $info) $dropshipMap[$no] = $info;
+            $report[] = ['name' => $name, 'ok' => true, 'type' => $label, 'detail' => count($res['dropship']) . ' pesanan dropship'];
         } elseif ($res['type'] === 'orders' && !empty($res['orders'])) {
             $orderSources[] = $res['orders'];
-            $orderFiles[] = ['name' => $name, 'mk' => $res['marketplace'] ?? null];
+            $orderFiles[] = ['name' => $name, 'mk' => $res['marketplace'] ?? null, 'ridx' => count($report)];
+            $report[] = ['name' => $name, 'ok' => true, 'type' => $label, 'detail' => count($res['orders']) . ' pesanan terbaca'];
+        } elseif ($res['type'] === 'orders') {
+            $report[] = ['name' => $name, 'ok' => false,
+                'reason' => 'Terbaca sebagai ' . $label . ' tapi tidak ada baris pesanan (file kosong / semua terfilter).'];
         } else {
             $unknown[] = $name;
+            $report[] = ['name' => $name, 'ok' => false,
+                'reason' => 'Format tidak dikenali. Pastikan ini file ekspor asli Shopee/Tokopedia/TikTok/Jakmall (.xlsx/.csv) yang belum diedit.'];
         }
     }
 
@@ -578,6 +600,9 @@ function handle_import(): void
             if ($of['mk'] !== null && $of['mk'] !== $grp) {
                 $lbl = $of['mk'] === 'SHOPEE' ? 'Shopee' : 'Tokopedia/TikTok';
                 $skipped[] = $of['name'] . ' (file ' . $lbl . ')';
+                $report[$of['ridx']]['ok'] = false;
+                $report[$of['ridx']]['reason'] = 'Beda channel: ini file ' . $lbl . ', tapi toko yang dipilih ' .
+                    MARKETPLACE_LABEL[$store['marketplace']] . '. Impor file ini ke toko ' . $lbl . '.';
             } else {
                 $matched[] = $orderSources[$i];
             }
@@ -596,6 +621,11 @@ function handle_import(): void
 
     if ($orderSources) {
         if (!$store) {
+            foreach ($orderFiles as $of) {
+                $report[$of['ridx']]['ok'] = false;
+                $report[$of['ridx']]['reason'] = 'Belum pilih toko tujuan — file pesanan butuh toko.';
+            }
+            $_SESSION['import_report'] = $report;
             flash('error', 'Pilih toko tujuan dulu untuk import pesanan.' . ($msgs ? ' [' . implode(' ', $msgs) . ']' : ''));
             return;
         }
@@ -607,27 +637,26 @@ function handle_import(): void
         $msgs[] = '(Belum ada file pesanan yang diunggah, jadi pesanan belum dibuat.)';
     }
 
+    $_SESSION['import_report'] = $report;
+
     // Tak ada apa pun yang berhasil terbaca.
     if (!$jakmall && !$orderSources && !$hasJakmallReport) {
         if ($skipped) {
             $g = $store ? MARKETPLACE_LABEL[$store['marketplace']] : '';
             flash('error', '❌ Tidak ada yang diimpor. Semua file pesanan beda channel dengan toko "' .
-                ($store['name'] ?? '') . '" (' . $g . '): ' . implode(', ', $skipped) .
-                '. Pilih toko yang sesuai channel file-nya (file Shopee → toko Shopee).');
+                ($store['name'] ?? '') . '" (' . $g . '). Lihat rincian per file di bawah.');
             return;
         }
-        $list = $unknown ? ' (' . implode(', ', $unknown) . ')' : '';
-        flash('error', 'Format file tidak dikenali' . $list .
-            '. Didukung: Laporan Penghasilan & file pesanan Shopee/Tokopedia/TikTok, Laporan Pesanan & Master Produk Jakmall.');
+        flash('error', 'Tidak ada file yang berhasil dibaca. Lihat rincian per file di bawah.');
         return;
     }
-    if ($unknown) $msgs[] = '⚠️ Dilewati (tak dikenali): ' . implode(', ', $unknown) . '.';
+    if ($unknown) $msgs[] = count($unknown) . ' file tak dikenali (lihat rincian).';
 
     // Sebagian berhasil, sebagian file beda channel dilewati → peringatan terpisah.
     if ($skipped) {
-        flash('warning', '⚠️ ' . count($skipped) . ' file DILEWATI karena beda channel dengan toko ini: ' .
-            implode(', ', $skipped) . '. Impor file itu ke toko channel-nya sendiri (mis. file Shopee → pilih toko Shopee).');
+        flash('warning', '⚠️ ' . count($skipped) . ' file DILEWATI karena beda channel dengan toko ini (rincian di bawah). ' .
+            'Impor file itu ke toko channel-nya sendiri (mis. file Shopee → pilih toko Shopee).');
     }
 
-    flash('success', implode(' ', $msgs));
+    flash('success', '✅ Berhasil: ' . implode(' ', $msgs));
 }
