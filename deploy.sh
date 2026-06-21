@@ -36,6 +36,8 @@ find . -type f \
   ! -name 'README.md' \
   ! -name 'config.sample.php' \
   ! -path './.git/*' \
+  ! -path './.claude/*' \
+  ! -name '*.xlsx' ! -name '*.xls' \
 | while read -r f; do
     rel="${f#./}"
     # FTP_DIR boleh kosong (akun FTP yang sudah chroot ke web root).
