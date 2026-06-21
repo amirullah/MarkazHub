@@ -9,6 +9,18 @@ $to          = trim($_GET['to'] ?? '');
 $page        = max(1, (int) ($_GET['page'] ?? 1));
 $perPage     = 50;
 
+// Pengurutan (whitelist kolom agar aman dari injeksi).
+$profitExpr = '((o.product_revenue + o.other_income) - (o.cogs + o.admin_fee + o.shipping_cost_seller + o.voucher_seller_borne + o.dropship_cost + o.other_cost))';
+$sortMap = [
+    'date'  => 'o.order_date',
+    'no'    => 'o.external_no',
+    'omzet' => '(o.product_revenue + o.other_income)',
+    'laba'  => $profitExpr,
+];
+$sort = isset($_GET['sort'], $sortMap[$_GET['sort']]) ? $_GET['sort'] : 'date';
+$dir  = strtolower($_GET['dir'] ?? 'desc') === 'asc' ? 'ASC' : 'DESC';
+$orderBy = $sortMap[$sort] . ' ' . $dir . ', o.id ' . $dir;
+
 $needSql = '((SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) = 0
              OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.qty_assumed = 1))';
 
@@ -34,6 +46,7 @@ $wsql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 $carry = array_filter([
     'ch' => $ch, 'store' => $storeFilter ?: '', 'status' => $statusFilter,
     'q' => $qstr, 'need' => $needFilter ? '1' : '', 'from' => $from, 'to' => $to,
+    'sort' => $sort !== 'date' ? $sort : '', 'dir' => strtolower($dir) !== 'desc' ? strtolower($dir) : '',
 ], fn($v) => $v !== '' && $v !== 0);
 
 $totalRows = (int) scalar("SELECT COUNT(*) FROM orders o $wsql", $params);
@@ -62,7 +75,7 @@ $orders = q("SELECT o.*, s.name AS store_name,
             (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) AS item_count,
             (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id AND i.qty_assumed = 1) AS assumed_count
             FROM orders o JOIN stores s ON s.id = o.store_id
-            $wsql ORDER BY o.order_date DESC LIMIT $perPage OFFSET $offset", $params);
+            $wsql ORDER BY $orderBy LIMIT $perPage OFFSET $offset", $params);
 
 $stores = q('SELECT id, name, marketplace FROM stores ORDER BY name');
 $importBtn = '<a class="btn btn-primary" href="' . e(url('import')) . '">📥 Import</a>';
@@ -141,8 +154,11 @@ $presets = [
   <div class="card table-wrap">
     <table>
       <thead><tr>
-        <th>No. Pesanan</th><th>Tanggal</th><th>Toko</th><th>Pemenuhan</th><th>Status</th>
-        <th class="right">Omzet</th><th class="right">Laba</th>
+        <?= sort_th('orders', 'no', 'No. Pesanan', $sort, $dir, $carry) ?>
+        <?= sort_th('orders', 'date', 'Tanggal', $sort, $dir, $carry) ?>
+        <th>Toko</th><th>Pemenuhan</th><th>Status</th>
+        <?= sort_th('orders', 'omzet', 'Omzet', $sort, $dir, $carry, true) ?>
+        <?= sort_th('orders', 'laba', 'Laba', $sort, $dir, $carry, true) ?>
       </tr></thead>
       <tbody>
       <?php foreach ($orders as $o): $p = hitung_laba($o);

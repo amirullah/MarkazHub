@@ -10,9 +10,13 @@ if ($qstr !== '') {
     $params[] = '%' . $qstr . '%';
     $params[] = '%' . $qstr . '%';
 }
+$pSortMap = ['sku' => 'p.sku', 'name' => 'p.name', 'hpp' => 'p.cost_price', 'dropship' => 'p.dropship_cost'];
+$pSort = isset($_GET['sort'], $pSortMap[$_GET['sort']]) ? $_GET['sort'] : 'name';
+$pDir  = strtolower($_GET['dir'] ?? 'asc') === 'desc' ? 'DESC' : 'ASC';
+$pCarry = array_filter(['q' => $qstr]);
 $products = q("SELECT p.*, s.name AS supplier_name FROM products p
                LEFT JOIN suppliers s ON s.id = p.supplier_id
-               $cond ORDER BY p.name LIMIT $LIMIT", $params);
+               $cond ORDER BY {$pSortMap[$pSort]} $pDir LIMIT $LIMIT", $params);
 $suppliers = q('SELECT id, name, type FROM suppliers ORDER BY name');
 page_header('Produk & HPP', 'Katalog produk + modal (HPP) & biaya dropship Jakmall. SKU dipakai untuk mencocokkan saat import.');
 ?>
@@ -37,7 +41,13 @@ page_header('Produk & HPP', 'Katalog produk + modal (HPP) & biaya dropship Jakma
     <?php else: ?>
       <div class="card table-wrap">
         <table>
-          <thead><tr><th>SKU</th><th>Nama</th><th>HPP</th><th>Dropship</th><th>Supplier</th><th></th></tr></thead>
+          <thead><tr>
+            <?= sort_th('products', 'sku', 'SKU', $pSort, $pDir, $pCarry) ?>
+            <?= sort_th('products', 'name', 'Nama', $pSort, $pDir, $pCarry) ?>
+            <?= sort_th('products', 'hpp', 'HPP', $pSort, $pDir, $pCarry) ?>
+            <?= sort_th('products', 'dropship', 'Dropship', $pSort, $pDir, $pCarry) ?>
+            <th>Supplier</th><th></th>
+          </tr></thead>
           <tbody>
           <?php foreach ($products as $p): ?>
             <tr>

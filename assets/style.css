@@ -211,3 +211,8 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 .upload-slot.is-selected::after { content: "✓ ganti"; color: var(--pos); }
 .step-head { font-weight: 700; color: var(--slate-700); margin: 1.1rem 0 .5rem; font-size: .9rem; }
 .step-head .num { display: inline-flex; width: 1.4rem; height: 1.4rem; align-items: center; justify-content: center; background: var(--brand); color: #fff; border-radius: 999px; font-size: .8rem; margin-right: .4rem; }
+
+/* ---- Header tabel yang bisa diurutkan ---- */
+.sort-link { color: var(--slate-500); font-weight: 600; white-space: nowrap; }
+.sort-link:hover { color: var(--brand); }
+.sort-link.active { color: var(--brand); }

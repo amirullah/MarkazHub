@@ -73,6 +73,18 @@ function badge_status(string $st): string
     return '<span class="badge ' . STATUS_CLASS[$st] . '">' . e(STATUS_LABEL[$st]) . '</span>';
 }
 
+// Header kolom tabel yang bisa diklik untuk mengurutkan (toggle arah + panah).
+function sort_th(string $page, string $key, string $label, string $sort, string $dir, array $carry, bool $right = false): string
+{
+    $active = $sort === $key;
+    $newDir = ($active && strtoupper($dir) === 'ASC') ? 'desc' : 'asc';
+    $arrow = $active ? (strtoupper($dir) === 'ASC' ? ' ▲' : ' ▼') : '';
+    $params = array_merge($carry, ['sort' => $key, 'dir' => $newDir]);
+    unset($params['page']);
+    $cls = $right ? ' class="right"' : '';
+    return '<th' . $cls . '><a class="sort-link' . ($active ? ' active' : '') . '" href="' . e(url($page, $params)) . '">' . e($label) . $arrow . '</a></th>';
+}
+
 // Badge channel (Shopee / Tokopedia-TikTok digabung).
 function badge_channel(string $mp): string
 {
