@@ -216,3 +216,7 @@ hr { border: 0; border-top: 1px solid var(--slate-200); margin: .75rem 0; }
 .sort-link { color: var(--slate-500); font-weight: 600; white-space: nowrap; }
 .sort-link:hover { color: var(--brand); }
 .sort-link.active { color: var(--brand); }
+
+/* ---- Contoh nama file di slot upload ---- */
+.upload-eg { margin-top: .25rem; }
+.upload-eg code { background: var(--slate-100); padding: .05rem .3rem; border-radius: .25rem; font-size: .72rem; color: var(--slate-700); word-break: break-all; }

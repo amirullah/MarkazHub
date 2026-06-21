@@ -5,18 +5,20 @@ page_header('Import Laporan',
 
 // Slot dikelompokkan per sumber agar jelas. Deteksi tetap berdasarkan ISI file,
 // jadi slot hanya panduan; semua dikirim sebagai files[].
+// Tiap grup punya 'ch' (channel) — slot disaring sesuai toko yang dipilih.
+// Tiap slot: [judul, ekstensi, deskripsi, contoh nama file].
 $groups = [
-    ['title' => '📦 File Shopee', 'note' => 'untuk toko Shopee', 'slots' => [
-        ['Laporan Penghasilan Shopee', '.xlsx', 'Biaya admin/komisi/layanan riil + laba bersih per pesanan. Boleh beberapa file (mis. per bulan) sekaligus.'],
-        ['Order Completed Shopee', '.xlsx', 'Daftar item: SKU penjual &amp; jumlah (qty). <strong>Boleh pilih beberapa file bulanan sekaligus</strong> agar menutup periode Laporan Penghasilan.'],
+    ['ch' => 'SHOPEE', 'title' => '📦 File Shopee', 'note' => 'untuk toko Shopee', 'slots' => [
+        ['Laporan Penghasilan Shopee', '.xlsx', 'Biaya admin/komisi/layanan + laba bersih per pesanan.', 'Income.sudah dilepas.id.20260101_20260621.xlsx'],
+        ['Order Completed Shopee', '.xlsx', 'Produk, SKU penjual &amp; jumlah (qty).', 'Order.completed.20260401_20260501.xlsx'],
     ]],
-    ['title' => '🛒 File Tokopedia / TikTok', 'note' => 'untuk toko Tokopedia/TikTok', 'slots' => [
-        ['Laporan Penghasilan Tokopedia/TikTok', '.xlsx', 'Settlement: Total Pendapatan, Total Biaya &amp; uang bersih per pesanan. Boleh beberapa file.'],
-        ['Pesanan Selesai Tokopedia/TikTok', '.csv', 'Daftar item: Seller SKU &amp; jumlah (qty). Boleh pilih beberapa file bulanan sekaligus.'],
+    ['ch' => 'TOKOTIKTOK', 'title' => '🛒 File Tokopedia / TikTok', 'note' => 'untuk toko Tokopedia/TikTok', 'slots' => [
+        ['Laporan Penghasilan Tokopedia/TikTok', '.xlsx', 'Total Pendapatan, Total Biaya &amp; uang bersih per pesanan.', 'income_20260621195457(UTC+7).xlsx'],
+        ['Pesanan Selesai Tokopedia/TikTok', '.csv', 'Produk, Seller SKU &amp; jumlah (qty).', 'Selesai pesanan-2026-06-21-18_40.csv'],
     ]],
-    ['title' => '🚚 File Jakmall', 'note' => 'untuk semua toko', 'slots' => [
-        ['Master Produk Jakmall', '.xlsx', 'Modal/HPP per SKU + ID produk marketplace; isi katalog otomatis.'],
-        ['Laporan Pesanan Jakmall', '.xlsx', 'Deteksi pesanan dropship + biaya mitra Jakmall.'],
+    ['ch' => 'ALL', 'title' => '🚚 File Jakmall', 'note' => 'untuk semua toko', 'slots' => [
+        ['Master Produk Jakmall', '.xlsx', 'Modal/HPP per SKU + ID produk; isi katalog otomatis.', '20260621_MasterProduct.xlsx'],
+        ['Laporan Pesanan Jakmall', '.xlsx', 'Deteksi pesanan dropship + biaya mitra Jakmall.', 'LaporanPesanan-23032026-20062026.xlsx'],
     ]],
 ];
 ?>
@@ -33,15 +35,16 @@ $groups = [
           <select name="store_id" class="input">
             <option value="">— Pilih toko —</option>
             <?php foreach ($stores as $s): ?>
-              <option value="<?= $s['id'] ?>"><?= e($s['name']) ?> · <?= e(CHANNEL_LABEL[CHANNEL_OF[$s['marketplace']]]) ?></option>
+              <option value="<?= $s['id'] ?>" data-ch="<?= e(CHANNEL_OF[$s['marketplace']]) ?>"><?= e($s['name']) ?> · <?= e(CHANNEL_LABEL[CHANNEL_OF[$s['marketplace']]]) ?></option>
             <?php endforeach; ?>
           </select>
-          <p class="hint">Pilih toko sesuai marketplace file pesanan. File Shopee ke toko Shopee, file Tokopedia/TikTok ke toko Tokopedia/TikTok (kalau salah, otomatis ditolak).</p>
+          <p class="hint">Slot file di bawah otomatis menyesuaikan channel toko ini, jadi tak akan keliru marketplace.</p>
         </div>
 
         <div class="step-head"><span class="num">2</span>Pilih file (klik tiap kotak — boleh beberapa file)</div>
+        <p class="hint pick-store-hint">↑ Pilih toko dulu untuk menampilkan slot file pesanannya.</p>
         <?php foreach ($groups as $g): ?>
-          <div class="upload-group">
+          <div class="upload-group" data-ch="<?= e($g['ch']) ?>">
             <div class="upload-group-head"><?= $g['title'] ?> <span class="muted">· <?= e($g['note']) ?></span></div>
             <div class="upload-slots">
               <?php foreach ($g['slots'] as $sl): ?>
@@ -49,6 +52,7 @@ $groups = [
                   <div class="upload-body">
                     <div class="upload-title"><?= e($sl[0]) ?> <span class="muted">(<?= e($sl[1]) ?>)</span></div>
                     <div class="upload-desc"><?= $sl[2] ?></div>
+                    <div class="upload-eg muted tiny">contoh nama file: <code><?= e($sl[3]) ?></code></div>
                     <div class="file-status muted" data-status>Belum dipilih</div>
                   </div>
                   <input type="file" name="files[]" accept=".xlsx,.csv" class="js-file" multiple hidden>
@@ -80,6 +84,22 @@ $groups = [
             }
           });
         });
+        // Tampilkan slot file sesuai channel toko yang dipilih.
+        (function () {
+          var sel = document.querySelector('select[name=store_id]');
+          var hint = document.querySelector('.pick-store-hint');
+          function sync() {
+            var opt = sel.options[sel.selectedIndex];
+            var ch = opt ? (opt.getAttribute('data-ch') || '') : '';
+            document.querySelectorAll('.upload-group').forEach(function (g) {
+              var gch = g.getAttribute('data-ch');
+              g.style.display = (gch === 'ALL' || (ch && gch === ch)) ? '' : 'none';
+            });
+            if (hint) hint.style.display = ch ? 'none' : '';
+          }
+          sel.addEventListener('change', sync);
+          sync();
+        })();
       </script>
     <?php endif; ?>
   </div>
