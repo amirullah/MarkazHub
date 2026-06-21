@@ -16,3 +16,6 @@ Thumbs.db
 
 # Folder file contoh ekspor (data asli) — jangan di-commit/deploy
 contoh file/
+
+# Skrip scratch/tes sementara
+_*.php
