@@ -1,8 +1,10 @@
 <?php
-// Parser CSV laporan pesanan, toleran terhadap variasi nama kolom dari
+// Parser laporan pesanan (CSV & XLSX), toleran terhadap variasi nama kolom dari
 // Shopee / Tokopedia / TikTok Shop. Menghasilkan struktur pesanan
 // ternormalisasi (lepas dari format asal) - mirip lapisan adapter di
 // versi Next.js, sehingga mudah ditambah sumber lain (mis. API resmi).
+
+require_once __DIR__ . '/xlsx.php';
 
 // Normalisasi nama kolom: huruf kecil, buang non-alfanumerik.
 function mp_norm_key(string $k): string
@@ -22,18 +24,26 @@ function mp_pick(array $row, array $candidates): ?string
     return null;
 }
 
-// Parse angka gaya Indonesia ("Rp1.250.000,50" -> 1250000.5).
+// Parse angka gaya Indonesia: koma = desimal, titik = pemisah ribuan.
+// Contoh: "Rp1.250.000,50" -> 1250000.5 ; "30.347" -> 30347 ; "20.881" -> 20881.
+// Catatan: ekspor Shopee/Jakmall sering menulis rupiah sebagai TEKS dengan titik
+// ribuan (mis. "187.271"), jadi titik tunggal berpola grup-3-digit = ribuan.
 function mp_num(?string $v): float
 {
     if ($v === null || $v === '') return 0.0;
     $s = preg_replace('/\s+/', '', str_ireplace('rp', '', $v));
     $hasComma = strpos($s, ',') !== false;
-    $hasDot = strpos($s, '.') !== false;
-    if ($hasComma && $hasDot) {
+    $dots = substr_count($s, '.');
+    if ($hasComma) {
+        // Koma = desimal; titik = ribuan.
         $s = str_replace('.', '', $s);
         $s = str_replace(',', '.', $s);
-    } elseif ($hasComma) {
-        $s = str_replace(',', '.', $s);
+    } elseif ($dots >= 1) {
+        // Tanpa koma: anggap titik = ribuan bila ada >1 titik, atau berpola
+        // grup 3 digit (mis. "30.347", "1.250.000"). Selain itu desimal biasa.
+        if ($dots > 1 || preg_match('/^-?\d{1,3}(\.\d{3})+$/', $s)) {
+            $s = str_replace('.', '', $s);
+        }
     }
     $s = preg_replace('/[^0-9.\-]/', '', $s);
     return is_numeric($s) ? (float) $s : 0.0;
@@ -46,20 +56,50 @@ function mp_int(?string $v): int
 }
 
 const MP_COLUMNS = [
-    'externalNo' => ['order_no', 'nomor_pesanan', 'no_pesanan', 'order id', 'order sn', 'ordersn', 'invoice', 'nomor invoice'],
+    'externalNo' => ['order_no', 'nomor_pesanan', 'no_pesanan', 'no. pesanan', 'order id', 'order sn', 'ordersn', 'invoice', 'nomor invoice'],
     'orderDate'  => ['order_date', 'tanggal', 'tanggal pesanan', 'waktu pesanan dibuat', 'created time', 'order creation date'],
     'status'     => ['status', 'order status', 'status pesanan'],
-    'buyerName'  => ['buyer', 'buyer name', 'pembeli', 'username pembeli', 'nama pembeli'],
-    'shippingChargedToBuyer' => ['shipping_charged', 'ongkir dibayar pembeli', 'ongkos kirim dibayar pembeli', 'shipping fee paid by buyer'],
+    'buyerName'  => ['buyer', 'buyer name', 'pembeli', 'username pembeli', 'username (pembeli)', 'nama pembeli'],
+    'shippingChargedToBuyer' => ['shipping_charged', 'ongkir dibayar pembeli', 'ongkos kirim dibayar oleh pembeli', 'ongkos kirim dibayar pembeli', 'shipping fee paid by buyer'],
     'adminFee'   => ['admin_fee', 'biaya admin', 'biaya administrasi', 'biaya layanan', 'commission fee', 'transaction fee', 'platform fee'],
     'shippingCostSeller' => ['shipping_cost_seller', 'ongkir ditanggung penjual', 'subsidi ongkir', 'seller shipping fee'],
-    'voucherSellerBorne' => ['voucher_seller', 'voucher ditanggung penjual', 'diskon penjual', 'seller discount', 'seller voucher'],
+    'voucherSellerBorne' => ['voucher_seller', 'voucher ditanggung penjual', 'diskon dari penjual', 'diskon penjual', 'seller discount', 'seller voucher'],
     'otherIncome' => ['other_income', 'pendapatan lain'],
     'otherCost'  => ['other_cost', 'biaya lain'],
-    'sku'        => ['sku', 'sku produk', 'seller sku', 'nomor referensi sku'],
+    'sku'        => ['sku', 'sku produk', 'seller sku', 'nomor referensi sku', 'sku induk'],
     'productName' => ['product_name', 'nama produk', 'product name'],
+    'variation'  => ['nama variasi', 'variation name', 'variasi'],
     'qty'        => ['qty', 'quantity', 'jumlah', 'kuantitas'],
-    'unitPrice'  => ['unit_price', 'harga satuan', 'harga awal', 'original price', 'harga jual'],
+    'unitPrice'  => ['unit_price', 'harga setelah diskon', 'harga satuan', 'harga awal', 'original price', 'harga jual'],
+];
+
+// Kolom khusus Laporan Penghasilan Shopee (sheet "Income"). Biaya bertanda
+// negatif; nilai bersih akhir = "Total Penghasilan".
+const MP_SHOPEE_INCOME = [
+    'externalNo'      => ['no. pesanan'],
+    'orderDate'       => ['waktu pesanan dibuat'],
+    'buyerName'       => ['username (pembeli)'],
+    'productRevenue'  => ['harga asli produk'],
+    'totalIncome'     => ['total penghasilan'],
+    'shippingToBuyer' => ['ongkir dibayar pembeli'],
+    // Potongan platform (biaya layanan marketplace).
+    'platformFees' => [
+        'biaya komisi ams', 'biaya administrasi', 'biaya layanan', 'biaya proses pesanan',
+        'premi', 'biaya program hemat biaya kirim', 'biaya transaksi', 'biaya kampanye',
+        'bea masuk, ppn & pph', 'biaya isi saldo otomatis (dari penghasilan)',
+    ],
+    // Diskon / voucher yang ditanggung penjual.
+    'sellerDiscounts' => [
+        'total diskon produk', 'voucher disponsor oleh penjual',
+        'voucher co-fund disponsor oleh penjual', 'cashback koin disponsori penjual',
+        'cashback koin co-fund disponsori penjual', 'promo gratis ongkir dari penjual',
+    ],
+    // Komponen ongkir (bisa saling menutup, sisa negatif = ditanggung penjual).
+    'shippingComponents' => [
+        'diskon ongkir ditanggung jasa kirim', 'gratis ongkir dari shopee',
+        'ongkir yang diteruskan oleh shopee ke jasa kirim', 'ongkos kirim pengembalian barang',
+        'kembali ke biaya pengiriman pengirim', 'pengembalian biaya kirim',
+    ],
 ];
 
 // Baca file CSV menjadi array baris asosiatif (kunci sudah dinormalisasi).
@@ -152,4 +192,252 @@ function mp_parse_date(?string $raw): string
     if (!$raw) return date('Y-m-d H:i:s');
     $ts = strtotime($raw);
     return $ts ? date('Y-m-d H:i:s', $ts) : date('Y-m-d H:i:s');
+}
+
+// ============================================================
+// Pembaca XLSX + deteksi format otomatis (tanpa template khusus)
+// ============================================================
+
+// Cari indeks baris header di antara $scan baris pertama: baris yang memuat
+// SEMUA kunci (sudah dinormalisasi) pada $mustHave. Kembalikan -1 jika tak ada.
+function mp_header_index(array $rows, array $mustHave, int $scan = 20): int
+{
+    $limit = min($scan, count($rows));
+    for ($i = 0; $i < $limit; $i++) {
+        $keys = array_map('mp_norm_key', array_map('strval', $rows[$i]));
+        $set = array_flip($keys);
+        $ok = true;
+        foreach ($mustHave as $k) {
+            if (!isset($set[mp_norm_key($k)])) { $ok = false; break; }
+        }
+        if ($ok) return $i;
+    }
+    return -1;
+}
+
+// Ubah baris mentah (array indeks) menjadi baris asosiatif dengan kunci
+// ternormalisasi, memakai baris $headerIdx sebagai header.
+function mp_assoc_rows(array $rows, int $headerIdx): array
+{
+    $keys = array_map('mp_norm_key', array_map('strval', $rows[$headerIdx]));
+    $out = [];
+    $n = count($rows);
+    for ($i = $headerIdx + 1; $i < $n; $i++) {
+        $data = $rows[$i];
+        $blank = true;
+        $assoc = [];
+        foreach ($keys as $ci => $k) {
+            if ($k === '') continue;
+            $v = isset($data[$ci]) ? trim((string) $data[$ci]) : '';
+            if ($v !== '') $blank = false;
+            // jangan timpa kolom duplikat yang sudah berisi
+            if (!isset($assoc[$k]) || $assoc[$k] === '') $assoc[$k] = $v;
+        }
+        if (!$blank) $out[] = $assoc;
+    }
+    return $out;
+}
+
+// Jumlahkan nilai absolut dari beberapa kolom kandidat (untuk biaya negatif).
+function mp_abs_sum(array $row, array $candidates): float
+{
+    $sum = 0.0;
+    foreach ($candidates as $c) {
+        $k = mp_norm_key($c);
+        if (isset($row[$k]) && $row[$k] !== '') $sum += abs(mp_num($row[$k]));
+    }
+    return $sum;
+}
+
+// Jumlahkan nilai bertanda (boleh + / -) dari beberapa kolom kandidat.
+function mp_signed_sum(array $row, array $candidates): float
+{
+    $sum = 0.0;
+    foreach ($candidates as $c) {
+        $k = mp_norm_key($c);
+        if (isset($row[$k]) && $row[$k] !== '') $sum += mp_num($row[$k]);
+    }
+    return $sum;
+}
+
+// ---------- Adapter: Master Produk Jakmall ----------
+// Kembalikan daftar produk [sku, name, cost] dari kolom Kode SKU / Nama / Harga.
+function mp_jakmall_products(array $assoc): array
+{
+    $out = [];
+    foreach ($assoc as $r) {
+        $sku = mp_pick($r, ['kode sku', 'sku']);
+        if (!$sku) continue;
+        $out[] = [
+            'sku'  => $sku,
+            'name' => mp_pick($r, ['nama produk', 'product name']) ?: $sku,
+            'cost' => mp_num(mp_pick($r, ['harga', 'price', 'cost'])),
+        ];
+    }
+    return $out;
+}
+
+// ---------- Adapter: Laporan Penghasilan Shopee (sheet Income + Seller Fee) ----------
+// Menghasilkan pesanan ternormalisasi dengan biaya yang sudah dipetakan ke
+// ember (admin/voucher/ongkir) dan SELISIH direkonsiliasi ke other_cost agar
+// laba bersih (sebelum HPP) persis = "Total Penghasilan".
+function mp_income_to_orders(array $incomeAssoc, array $itemsByOrder = []): array
+{
+    $C = MP_SHOPEE_INCOME;
+    $orders = [];
+    foreach ($incomeAssoc as $r) {
+        $no = mp_pick($r, $C['externalNo']);
+        if (!$no) continue;
+
+        $revenue = mp_num(mp_pick($r, $C['productRevenue']));
+        $net = mp_num(mp_pick($r, $C['totalIncome']));
+
+        $admin   = mp_abs_sum($r, $C['platformFees']);
+        $voucher = mp_abs_sum($r, $C['sellerDiscounts']);
+        $shipNet = mp_signed_sum($r, $C['shippingComponents']);
+        $shipSeller = $shipNet < 0 ? -$shipNet : 0.0;
+
+        // Rekonsiliasi: total potongan harus = revenue - net.
+        $totalDeduction = $revenue - $net;
+        $other = $totalDeduction - ($admin + $voucher + $shipSeller);
+
+        $orders[$no] = [
+            'externalNo' => $no,
+            'orderDate'  => mp_pick($r, $C['orderDate']),
+            'status'     => 'COMPLETED', // dana dilepas = pesanan selesai
+            'buyerName'  => mp_pick($r, $C['buyerName']),
+            'shippingChargedToBuyer' => mp_num(mp_pick($r, $C['shippingToBuyer'])),
+            'adminFee'   => $admin,
+            'shippingCostSeller' => $shipSeller,
+            'voucherSellerBorne' => $voucher,
+            'otherIncome' => 0.0,
+            'otherCost'  => $other,
+            'productRevenue' => $revenue,
+            'items'      => $itemsByOrder[$no] ?? [],
+            '_hasIncome' => true,
+        ];
+    }
+    return $orders;
+}
+
+// Sheet "Seller Fee" Shopee: baris berpasangan Order/Sku; baris "Sku" memuat
+// Nama Produk & ID Produk per pesanan (tanpa SKU penjual / qty).
+function mp_sellerfee_items(array $rows): array
+{
+    $hi = mp_header_index($rows, ['no. pesanan', 'nama produk'], 8);
+    if ($hi < 0) return [];
+    $assoc = mp_assoc_rows($rows, $hi);
+    $byOrder = [];
+    foreach ($assoc as $r) {
+        $no = mp_pick($r, ['no. pesanan']);
+        $name = mp_pick($r, ['nama produk']);
+        if (!$no || !$name || $name === '-') continue;
+        $byOrder[$no][] = [
+            'sku'       => null,
+            'name'      => $name,
+            'qty'       => 1,
+            'unitPrice' => 0.0,
+        ];
+    }
+    return $byOrder;
+}
+
+// ---------- Dispatcher: baca satu file -> {type, payload} ----------
+// type: 'jakmall' | 'orders' (ternormalisasi siap merge) | 'unknown'
+function mp_read_file(string $path, string $origName = ''): array
+{
+    $ext = strtolower(pathinfo($origName !== '' ? $origName : $path, PATHINFO_EXTENSION));
+
+    if ($ext === 'csv' || $ext === 'txt') {
+        $rows = mp_read_csv($path);
+        return ['type' => 'orders', 'orders' => mp_rows_to_orders($rows), 'source' => 'csv'];
+    }
+
+    $sheets = xlsx_read($path);
+    if (!$sheets) return ['type' => 'unknown'];
+
+    // 1) Master Produk Jakmall?
+    foreach ($sheets as $rows) {
+        $hi = mp_header_index($rows, ['kode sku', 'harga'], 5);
+        if ($hi >= 0) {
+            return ['type' => 'jakmall', 'products' => mp_jakmall_products(mp_assoc_rows($rows, $hi)), 'source' => 'jakmall'];
+        }
+    }
+
+    // 2) Laporan Penghasilan Shopee (Income + Seller Fee)?
+    foreach ($sheets as $name => $rows) {
+        $hi = mp_header_index($rows, ['no. pesanan', 'total penghasilan'], 12);
+        if ($hi >= 0) {
+            $items = [];
+            foreach ($sheets as $sn => $sr) {
+                if (stripos($sn, 'fee') !== false) { $items = mp_sellerfee_items($sr); break; }
+            }
+            $orders = mp_income_to_orders(mp_assoc_rows($rows, $hi), $items);
+            return ['type' => 'orders', 'orders' => array_values($orders), 'source' => 'shopee_income'];
+        }
+    }
+
+    // 3) Shopee Order Lengkap (punya No. Pesanan + Nomor Referensi SKU)?
+    foreach ($sheets as $rows) {
+        $hi = mp_header_index($rows, ['no. pesanan', 'nomor referensi sku'], 5);
+        if ($hi >= 0) {
+            return ['type' => 'orders', 'orders' => mp_rows_to_orders(mp_assoc_rows($rows, $hi)), 'source' => 'shopee_order'];
+        }
+    }
+
+    // 4) Generik: sheet pertama, cari baris header bernomor pesanan.
+    foreach ($sheets as $rows) {
+        $hi = mp_header_index($rows, ['no. pesanan'], 10);
+        if ($hi < 0) $hi = mp_header_index($rows, ['order id'], 10);
+        if ($hi >= 0) {
+            return ['type' => 'orders', 'orders' => mp_rows_to_orders(mp_assoc_rows($rows, $hi)), 'source' => 'generic_xlsx'];
+        }
+    }
+
+    return ['type' => 'unknown'];
+}
+
+// Gabungkan pesanan dari beberapa sumber berdasarkan nomor pesanan. Sumber yang
+// mengandung biaya riil (Income) menang untuk angka finansial; sumber dengan
+// item (Order Lengkap) menang untuk daftar item/SKU/qty.
+function mp_merge_orders(array $sources): array
+{
+    $merged = [];
+    foreach ($sources as $orders) {
+        foreach ($orders as $o) {
+            $no = $o['externalNo'];
+            if (!isset($merged[$no])) { $merged[$no] = $o; continue; }
+            $cur = $merged[$no];
+
+            // Item: pilih yang punya SKU (lebih kaya) atau yang lebih banyak.
+            $oHasSku = mp_items_have_sku($o['items']);
+            $curHasSku = mp_items_have_sku($cur['items']);
+            if (($oHasSku && !$curHasSku) ||
+                (!empty($o['items']) && count($o['items']) > count($cur['items']) && !$curHasSku)) {
+                $cur['items'] = $o['items'];
+            }
+
+            // Finansial: sumber dengan Income menang.
+            if (!empty($o['_hasIncome']) && empty($cur['_hasIncome'])) {
+                foreach (['productRevenue', 'adminFee', 'shippingCostSeller', 'voucherSellerBorne',
+                             'otherIncome', 'otherCost', 'shippingChargedToBuyer', 'status', '_hasIncome'] as $k) {
+                    $cur[$k] = $o[$k] ?? ($cur[$k] ?? null);
+                }
+            }
+            // Lengkapi field yang kosong dari sumber lain.
+            foreach (['orderDate', 'buyerName', 'status'] as $k) {
+                if (empty($cur[$k]) && !empty($o[$k])) $cur[$k] = $o[$k];
+            }
+            $merged[$no] = $cur;
+        }
+    }
+    return array_values($merged);
+}
+
+function mp_items_have_sku(array $items): bool
+{
+    foreach ($items as $it) {
+        if (!empty($it['sku'])) return true;
+    }
+    return false;
 }

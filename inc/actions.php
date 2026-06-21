@@ -122,39 +122,66 @@ function handle_post(): void
             flash('success', 'Pesanan dihapus.');
             redirect(url('orders'));
 
-        // ---------- IMPORT CSV ----------
+        // ---------- IMPORT (XLSX/CSV) ----------
         case 'import_orders':
             handle_import();
-            redirect(url('orders'));
+            redirect(url('import'));
 
         default:
             redirect(url('dashboard'));
     }
 }
 
-function handle_import(): void
+// Kumpulkan semua file terunggah (mendukung banyak file: files[] atau file tunggal).
+function mp_collect_uploads(): array
 {
-    $storeId = (int) ($_POST['store_id'] ?? 0);
-    $fulfillment = in_array($_POST['fulfillment'] ?? '', FULFILLMENTS, true) ? $_POST['fulfillment'] : 'SELF';
-
-    $store = q1('SELECT * FROM stores WHERE id = ?', [$storeId]);
-    if (!$store) {
-        flash('error', 'Pilih toko tujuan dulu.');
-        return;
+    $out = [];
+    if (!empty($_FILES['files']) && is_array($_FILES['files']['tmp_name'] ?? null)) {
+        foreach ($_FILES['files']['tmp_name'] as $i => $tmp) {
+            if ($tmp && is_uploaded_file($tmp) && ((int) ($_FILES['files']['error'][$i] ?? 1)) === UPLOAD_ERR_OK) {
+                $out[] = ['tmp_name' => $tmp, 'name' => $_FILES['files']['name'][$i] ?? ''];
+            }
+        }
     }
-    if (empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name'])) {
-        flash('error', 'File CSV belum dipilih.');
-        return;
+    if (!empty($_FILES['file']['tmp_name']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
+        $out[] = ['tmp_name' => $_FILES['file']['tmp_name'], 'name' => $_FILES['file']['name'] ?? ''];
     }
+    return $out;
+}
 
-    $rows = mp_read_csv($_FILES['file']['tmp_name']);
-    $orders = mp_rows_to_orders($rows);
-    if (count($orders) === 0) {
-        flash('error', 'Tidak ada pesanan terbaca. Pastikan ada kolom nomor pesanan & nama produk.');
-        return;
+// Upsert katalog produk dari Master Produk Jakmall (SKU -> Harga sebagai modal).
+function import_jakmall_products(array $products): array
+{
+    $pdo = db();
+    $supId = scalar("SELECT id FROM suppliers WHERE type='JAKMALL' ORDER BY id LIMIT 1");
+    if (!$supId) {
+        exec_sql("INSERT INTO suppliers (name, type, note) VALUES ('Jakmall','JAKMALL','Dropship')");
+        $supId = (int) $pdo->lastInsertId();
     }
+    $st = $pdo->prepare(
+        'INSERT INTO products (sku, name, cost_price, dropship_cost, supplier_id, active)
+         VALUES (?,?,?,?,?,1)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), cost_price=VALUES(cost_price),
+            dropship_cost=VALUES(dropship_cost), supplier_id=VALUES(supplier_id), active=1'
+    );
+    $ins = 0; $upd = 0;
+    $pdo->beginTransaction();
+    foreach ($products as $p) {
+        if (($p['sku'] ?? '') === '') continue;
+        $st->execute([$p['sku'], mb_substr((string) $p['name'], 0, 255), (float) $p['cost'], (float) $p['cost'], $supId]);
+        if ($st->rowCount() === 1) $ins++; else $upd++; // 1=insert, 2=update (MySQL)
+    }
+    $pdo->commit();
+    return [$ins, $upd];
+}
 
-    // Peta SKU -> produk (untuk HPP otomatis)
+// Masukkan pesanan ternormalisasi (hasil merge) ke DB, hitung HPP via SKU.
+function import_shopee_orders(array $orders, array $store, string $fulfillment): string
+{
+    if (!$orders) return 'Tidak ada pesanan terbaca dari file.';
+    $storeId = (int) $store['id'];
+
+    // Peta SKU -> produk (untuk HPP otomatis), termasuk hasil upsert Jakmall.
     $skus = [];
     foreach ($orders as $o) {
         foreach ($o['items'] as $it) {
@@ -163,9 +190,12 @@ function handle_import(): void
     }
     $productBySku = [];
     if ($skus) {
-        $in = implode(',', array_fill(0, count($skus), '?'));
-        foreach (q("SELECT * FROM products WHERE sku IN ($in)", array_keys($skus)) as $p) {
-            $productBySku[$p['sku']] = $p;
+        $keys = array_keys($skus);
+        foreach (array_chunk($keys, 500) as $chunk) {
+            $in = implode(',', array_fill(0, count($chunk), '?'));
+            foreach (q("SELECT * FROM products WHERE sku IN ($in)", $chunk) as $p) {
+                $productBySku[$p['sku']] = $p;
+            }
         }
     }
 
@@ -178,7 +208,6 @@ function handle_import(): void
             [$storeId, $o['externalNo']]);
         if ($exists) { $skipped++; continue; }
 
-        // Bangun item + hitung HPP / biaya dropship
         $cogs = 0; $dropship = 0; $items = [];
         foreach ($o['items'] as $it) {
             $product = (!empty($it['sku']) && isset($productBySku[$it['sku']])) ? $productBySku[$it['sku']] : null;
@@ -201,7 +230,7 @@ function handle_import(): void
         if ($fulfillment === 'DROPSHIP') $cogs = 0;
 
         $revenue = $o['productRevenue'];
-        $adminFee = $o['adminFee'] > 0 ? $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
+        $adminFee = ($o['adminFee'] ?? 0) > 0 ? $o['adminFee'] : ($adminPct > 0 ? $revenue * $adminPct / 100 : 0);
 
         $pdo->beginTransaction();
         try {
@@ -210,10 +239,10 @@ function handle_import(): void
                     buyer_name, product_revenue, shipping_charged_to_buyer, other_income, cogs, admin_fee,
                     shipping_cost_seller, voucher_seller_borne, dropship_cost, other_cost)
                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                [$storeId, $o['externalNo'], $store['marketplace'], mp_map_status($o['status']), $fulfillment,
-                    mp_parse_date($o['orderDate']), $o['buyerName'] ?: null, $revenue,
-                    $o['shippingChargedToBuyer'], $o['otherIncome'], $cogs, $adminFee,
-                    $o['shippingCostSeller'], $o['voucherSellerBorne'], $dropship, $o['otherCost']]
+                [$storeId, $o['externalNo'], $store['marketplace'], mp_map_status($o['status'] ?? ''), $fulfillment,
+                    mp_parse_date($o['orderDate'] ?? null), ($o['buyerName'] ?? '') ?: null, $revenue,
+                    $o['shippingChargedToBuyer'] ?? 0, $o['otherIncome'] ?? 0, $cogs, $adminFee,
+                    $o['shippingCostSeller'] ?? 0, $o['voucherSellerBorne'] ?? 0, $dropship, $o['otherCost'] ?? 0]
             );
             $orderId = (int) $pdo->lastInsertId();
             foreach ($items as $it) {
@@ -231,11 +260,61 @@ function handle_import(): void
         }
     }
 
-    $msg = "Berhasil: $created pesanan baru, $skipped dilewati (duplikat).";
+    $msg = "Pesanan: $created baru, $skipped dilewati (duplikat).";
     if ($unmatched) {
         $list = implode(', ', array_slice(array_keys($unmatched), 0, 8));
-        $msg .= ' ⚠️ SKU belum terdaftar (HPP 0): ' . $list .
-            (count($unmatched) > 8 ? ', ...' : '') . '. Tambahkan di menu Produk lalu import ulang.';
+        $msg .= ' ⚠️ SKU tak ada di katalog (HPP 0): ' . $list .
+            (count($unmatched) > 8 ? ', ...' : '') . '. Unggah Master Produk Jakmall lalu import ulang.';
     }
-    flash($created > 0 ? 'success' : 'error', $msg);
+    return $msg;
+}
+
+function handle_import(): void
+{
+    $storeId = (int) ($_POST['store_id'] ?? 0);
+    $fulfillment = in_array($_POST['fulfillment'] ?? '', FULFILLMENTS, true) ? $_POST['fulfillment'] : 'SELF';
+
+    $uploads = mp_collect_uploads();
+    if (!$uploads) {
+        flash('error', 'Belum ada file dipilih. Pilih file .xlsx / .csv (boleh beberapa sekaligus).');
+        return;
+    }
+
+    $orderSources = []; $jakmall = []; $unknown = [];
+    foreach ($uploads as $u) {
+        $res = mp_read_file($u['tmp_name'], $u['name']);
+        if ($res['type'] === 'jakmall') {
+            foreach ($res['products'] as $p) $jakmall[$p['sku']] = $p; // dedup per SKU
+        } elseif ($res['type'] === 'orders' && !empty($res['orders'])) {
+            $orderSources[] = $res['orders'];
+        } else {
+            $unknown[] = $u['name'] ?: '(tanpa nama)';
+        }
+    }
+
+    $msgs = [];
+    if ($jakmall) {
+        [$ins, $upd] = import_jakmall_products(array_values($jakmall));
+        $msgs[] = "Master produk Jakmall: $ins baru, $upd diperbarui.";
+    }
+
+    if ($orderSources) {
+        $store = q1('SELECT * FROM stores WHERE id = ?', [$storeId]);
+        if (!$store) {
+            flash('error', 'Pilih toko tujuan dulu untuk import pesanan.' . ($msgs ? ' [' . implode(' ', $msgs) . ']' : ''));
+            return;
+        }
+        $orders = mp_merge_orders($orderSources);
+        $msgs[] = import_shopee_orders($orders, $store, $fulfillment);
+    }
+
+    if (!$jakmall && !$orderSources) {
+        $list = $unknown ? ' (' . implode(', ', $unknown) . ')' : '';
+        flash('error', 'Format file tidak dikenali' . $list .
+            '. Didukung: Laporan Penghasilan & Order Shopee, Master Produk Jakmall, atau CSV pesanan.');
+        return;
+    }
+    if ($unknown) $msgs[] = '⚠️ Dilewati (tak dikenali): ' . implode(', ', $unknown) . '.';
+
+    flash('success', implode(' ', $msgs));
 }

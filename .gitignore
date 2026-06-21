@@ -1,6 +1,11 @@
 # Kredensial database asli (jangan di-commit / push ke repo publik)
 config.php
 
+# File ekspor/import (berisi data pesanan & finansial asli) — jangan di-commit
+*.xlsx
+*.xls
+_*.csv
+
 # OS / editor
 .DS_Store
 Thumbs.db
