@@ -7,12 +7,12 @@ page_header('Import Laporan',
 // jadi slot hanya panduan; semua dikirim sebagai files[].
 $groups = [
     ['title' => '📦 File Shopee', 'note' => 'untuk toko Shopee', 'slots' => [
-        ['Laporan Penghasilan Shopee', '.xlsx', 'Biaya admin/komisi/layanan riil + laba bersih per pesanan.'],
-        ['Order Completed Shopee', '.xlsx', 'Daftar item: SKU penjual &amp; jumlah (dihubungkan via No. Pesanan).'],
+        ['Laporan Penghasilan Shopee', '.xlsx', 'Biaya admin/komisi/layanan riil + laba bersih per pesanan. Boleh beberapa file (mis. per bulan) sekaligus.'],
+        ['Order Completed Shopee', '.xlsx', 'Daftar item: SKU penjual &amp; jumlah (qty). <strong>Boleh pilih beberapa file bulanan sekaligus</strong> agar menutup periode Laporan Penghasilan.'],
     ]],
     ['title' => '🛒 File Tokopedia / TikTok', 'note' => 'untuk toko Tokopedia/TikTok', 'slots' => [
-        ['Laporan Penghasilan Tokopedia/TikTok', '.xlsx', 'Settlement: Total Pendapatan, Total Biaya &amp; uang bersih per pesanan.'],
-        ['Pesanan Selesai Tokopedia/TikTok', '.csv', 'Daftar item: Seller SKU &amp; jumlah per pesanan.'],
+        ['Laporan Penghasilan Tokopedia/TikTok', '.xlsx', 'Settlement: Total Pendapatan, Total Biaya &amp; uang bersih per pesanan. Boleh beberapa file.'],
+        ['Pesanan Selesai Tokopedia/TikTok', '.csv', 'Daftar item: Seller SKU &amp; jumlah (qty). Boleh pilih beberapa file bulanan sekaligus.'],
     ]],
     ['title' => '🚚 File Jakmall', 'note' => 'untuk semua toko', 'slots' => [
         ['Master Produk Jakmall', '.xlsx', 'Modal/HPP per SKU + ID produk marketplace; isi katalog otomatis.'],
@@ -50,7 +50,7 @@ $groups = [
                     <div class="upload-desc"><?= $sl[2] ?></div>
                     <div class="file-status muted" data-status>Belum dipilih</div>
                   </div>
-                  <input type="file" name="files[]" accept=".xlsx,.csv" class="js-file" hidden>
+                  <input type="file" name="files[]" accept=".xlsx,.csv" class="js-file" multiple hidden>
                 </label>
               <?php endforeach; ?>
             </div>
@@ -67,7 +67,9 @@ $groups = [
             var slot = inp.closest('.upload-slot');
             var st = slot.querySelector('[data-status]');
             if (inp.files && inp.files.length) {
-              st.textContent = '✓ ' + inp.files[0].name;
+              st.textContent = inp.files.length === 1
+                ? '✓ ' + inp.files[0].name
+                : '✓ ' + inp.files.length + ' file dipilih';
               st.classList.remove('muted'); st.classList.add('file-ok');
               slot.classList.add('is-selected');
             } else {
@@ -88,7 +90,7 @@ $groups = [
       <li>Pilih <strong>toko tujuan</strong>, lalu unggah file <strong>Laporan Penghasilan</strong> + <strong>file Pesanan</strong> (Order Completed / Pesanan Selesai) untuk <strong>periode yang sama</strong>.</li>
       <li>Sertakan <strong>Laporan Pesanan Jakmall</strong> agar pesanan dropship + biaya mitranya tertandai otomatis.</li>
     </ol>
-    <p class="hint">Boleh unggah beberapa file sekaligus. Setelah Import, pesan hasil merinci file apa saja yang terbaca &amp; jumlahnya. Import ulang tidak menggandakan data — pesanan lama justru dilengkapi.</p>
+    <p class="hint"><strong>Order Completed hanya bisa diunduh per bulan?</strong> Tidak masalah — unduh tiap bulan (mis. Des–Jun), lalu pilih <strong>semua file bulanan itu sekaligus</strong> di slot Order Completed (klik file sambil tahan Ctrl/⌘). Bisa juga impor sebagian dulu, lalu sisanya menyusul — pesanan lama otomatis dilengkapi, tidak menggandakan.</p>
   </div>
 </div>
 

@@ -138,15 +138,25 @@ function handle_post(): void
 }
 
 // Kumpulkan semua file terunggah (mendukung banyak file: files[] atau file tunggal).
+// Telusuri struktur $_FILES (bisa rata atau bersarang bila banyak input ber-multiple)
+// dan kumpulkan tiap file yang valid.
+function mp_walk_files($tmp, $name, $err, array &$out): void
+{
+    if (is_array($tmp)) {
+        foreach ($tmp as $k => $v) {
+            mp_walk_files($v, is_array($name) ? ($name[$k] ?? '') : $name,
+                is_array($err) ? ($err[$k] ?? UPLOAD_ERR_NO_FILE) : $err, $out);
+        }
+    } elseif ($tmp && is_uploaded_file($tmp) && (int) $err === UPLOAD_ERR_OK) {
+        $out[] = ['tmp_name' => $tmp, 'name' => (string) $name];
+    }
+}
+
 function mp_collect_uploads(): array
 {
     $out = [];
-    if (!empty($_FILES['files']) && is_array($_FILES['files']['tmp_name'] ?? null)) {
-        foreach ($_FILES['files']['tmp_name'] as $i => $tmp) {
-            if ($tmp && is_uploaded_file($tmp) && ((int) ($_FILES['files']['error'][$i] ?? 1)) === UPLOAD_ERR_OK) {
-                $out[] = ['tmp_name' => $tmp, 'name' => $_FILES['files']['name'][$i] ?? ''];
-            }
-        }
+    if (!empty($_FILES['files']['tmp_name'])) {
+        mp_walk_files($_FILES['files']['tmp_name'], $_FILES['files']['name'] ?? '', $_FILES['files']['error'] ?? UPLOAD_ERR_OK, $out);
     }
     if (!empty($_FILES['file']['tmp_name']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
         $out[] = ['tmp_name' => $_FILES['file']['tmp_name'], 'name' => $_FILES['file']['name'] ?? ''];
