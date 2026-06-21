@@ -81,6 +81,8 @@ const MP_TIKTOK_INCOME = [
     'revenue'     => ['total pendapatan'],
     'net'         => ['jumlah penyelesaian pembayaran', 'jumlah penyelesaian pesanan'],
     'totalFees'   => ['total biaya'],
+    'origValue'   => ['subtotal setelah diskon penjual', 'subtotal sebelum diskon'],
+    'refund'      => ['pengembalian dana pembeli', 'subtotal pengembalian dana setelah diskon penjual'],
 ];
 
 // Kolom khusus Laporan Penghasilan Shopee (sheet "Income"). Biaya bertanda
@@ -92,6 +94,7 @@ const MP_SHOPEE_INCOME = [
     'productRevenue'  => ['harga asli produk'],
     'totalIncome'     => ['total penghasilan'],
     'shippingToBuyer' => ['ongkir dibayar pembeli'],
+    'refund'          => ['jumlah pengembalian dana ke pembeli', 'pengembalian dana ke pembeli'],
     // Potongan platform (biaya layanan marketplace).
     'platformFees' => [
         'biaya komisi ams', 'biaya administrasi', 'biaya layanan', 'biaya proses pesanan',
@@ -332,8 +335,9 @@ function mp_income_to_orders(array $incomeAssoc, array $itemsByOrder = []): arra
 
         $revenue = mp_num(mp_pick($r, $C['productRevenue']));
         $net = mp_num(mp_pick($r, $C['totalIncome']));
-        // Lewati baris tanpa aktivitas uang (omzet & penghasilan dua-duanya 0).
-        if ($revenue == 0 && $net == 0) continue;
+        $refund = mp_num(mp_pick($r, $C['refund']));
+        // Pesanan retur/refund tetap DIDATA dengan status Dikembalikan (jangan dibuang).
+        $isReturn = $refund != 0 || ($revenue <= 0 && $net <= 0);
 
         $admin   = mp_abs_sum($r, $C['platformFees']);
         $voucher = mp_abs_sum($r, $C['sellerDiscounts']);
@@ -356,7 +360,7 @@ function mp_income_to_orders(array $incomeAssoc, array $itemsByOrder = []): arra
         $orders[$no] = [
             'externalNo' => $no,
             'orderDate'  => mp_pick($r, $C['orderDate']),
-            'status'     => 'COMPLETED', // dana dilepas = pesanan selesai
+            'status'     => $isReturn ? 'RETURNED' : 'COMPLETED',
             'buyerName'  => mp_pick($r, $C['buyerName']),
             'shippingChargedToBuyer' => mp_num(mp_pick($r, $C['shippingToBuyer'])),
             'adminFee'   => $admin,
@@ -413,15 +417,18 @@ function mp_tiktok_income_to_orders(array $assoc): array
         if (!$no) continue;
         $revenue = mp_num(mp_pick($r, $C['revenue']));
         $net = mp_num(mp_pick($r, $C['net']));
-        // Lewati baris tanpa aktivitas uang (mis. pesanan yg dicairkan di periode
-        // lain) — kalau dibuat, jadi pesanan kosong Rp0 yang membingungkan.
-        if ($revenue == 0 && $net == 0) continue;
+        $refund = mp_num(mp_pick($r, $C['refund']));
+        // Pesanan retur/refund (ada pengembalian dana, atau omzet & net <= 0):
+        // TETAP didata dengan status Dikembalikan, JANGAN dibuang.
+        $isReturn = $refund != 0 || ($revenue <= 0 && $net <= 0);
+        // Tampilkan omzet asli pesanan (sebelum refund) agar tidak Rp0/kosong.
+        if ($revenue == 0) $revenue = mp_num(mp_pick($r, $C['origValue']));
         $admin = abs(mp_num(mp_pick($r, $C['totalFees'])));
         $other = ($revenue - $net) - $admin; // rekonsiliasi
         $orders[$no] = [
             'externalNo' => $no,
             'orderDate'  => mp_pick($r, $C['orderDate']),
-            'status'     => 'COMPLETED',
+            'status'     => $isReturn ? 'RETURNED' : 'COMPLETED',
             'buyerName'  => null,
             'shippingChargedToBuyer' => 0.0,
             'adminFee'   => $admin,
