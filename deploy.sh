@@ -37,6 +37,7 @@ find . -type f \
   ! -name 'config.sample.php' \
   ! -path './.git/*' \
   ! -path './.claude/*' \
+  ! -path './contoh file/*' \
   ! -name '*.xlsx' ! -name '*.xls' \
 | while read -r f; do
     rel="${f#./}"

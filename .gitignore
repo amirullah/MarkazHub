@@ -13,3 +13,6 @@ Thumbs.db
 
 # Setelan lokal Claude Code (bisa memuat kredensial) — jangan di-commit
 .claude/settings.local.json
+
+# Folder file contoh ekspor (data asli) — jangan di-commit/deploy
+contoh file/

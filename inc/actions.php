@@ -164,12 +164,20 @@ function import_jakmall_products(array $products): array
          ON DUPLICATE KEY UPDATE name=VALUES(name), cost_price=VALUES(cost_price),
             dropship_cost=VALUES(dropship_cost), supplier_id=VALUES(supplier_id), active=1'
     );
+    // Pemetaan ID Produk marketplace (Shopee per toko, dll) -> SKU.
+    $stId = $pdo->prepare(
+        'INSERT INTO product_marketplace_ids (marketplace_product_id, sku) VALUES (?,?)
+         ON DUPLICATE KEY UPDATE sku=VALUES(sku)'
+    );
     $ins = 0; $upd = 0;
     $pdo->beginTransaction();
     foreach ($products as $p) {
         if (($p['sku'] ?? '') === '') continue;
         $st->execute([$p['sku'], mb_substr((string) $p['name'], 0, 255), (float) $p['cost'], (float) $p['cost'], $supId]);
         if ($st->rowCount() === 1) $ins++; else $upd++; // 1=insert, 2=update (MySQL)
+        foreach ($p['mpIds'] ?? [] as $mpId) {
+            $stId->execute([mb_substr((string) $mpId, 0, 64), $p['sku']]);
+        }
     }
     $pdo->commit();
     return [$ins, $upd];
@@ -217,16 +225,43 @@ function import_shopee_orders(array $orders, array $store, array $dropshipMap, b
     $storeId = (int) $store['id'];
 
     // Pass 1: gabungkan tiap pesanan import dengan pesanan lama di DB (yang lebih
-    // kaya menang), LALU kumpulkan SKU dari hasil gabungan — penting karena item
-    // ber-SKU bisa berasal dari data lama saat file yang diimpor kini tak punya SKU.
-    $prepared = []; $skus = [];
+    // kaya menang). Kumpulkan ID Produk marketplace dari item yang belum ber-SKU
+    // (item Laporan Penghasilan hanya punya ID Produk Shopee + nama).
+    $prepared = []; $mpIds = [];
     foreach ($orders as $o) {
         $ex = q1('SELECT * FROM orders WHERE store_id = ? AND external_no = ?', [$storeId, $o['externalNo']]);
         $exItems = $ex ? q('SELECT * FROM order_items WHERE order_id = ?', [$ex['id']]) : [];
         if ($ex) $o = mp_merge_orders([[order_row_to_norm($ex, $exItems)], [$o]])[0];
-        foreach ($o['items'] as $it) if (!empty($it['sku'])) $skus[$it['sku']] = true;
+        foreach ($o['items'] as $it) {
+            if (empty($it['sku']) && !empty($it['shopeeId'])) $mpIds[$it['shopeeId']] = true;
+        }
         $prepared[] = ['ex' => $ex, 'exItems' => $exItems, 'o' => $o];
     }
+
+    // Peta ID Produk marketplace -> SKU (dari Master Jakmall), untuk melengkapi
+    // SKU item Laporan Penghasilan tanpa butuh file Order Completed.
+    $skuByMpId = [];
+    if ($mpIds) {
+        foreach (array_chunk(array_keys($mpIds), 500) as $chunk) {
+            $in = implode(',', array_fill(0, count($chunk), '?'));
+            foreach (q("SELECT marketplace_product_id m, sku FROM product_marketplace_ids WHERE marketplace_product_id IN ($in)", $chunk) as $row) {
+                $skuByMpId[$row['m']] = $row['sku'];
+            }
+        }
+    }
+
+    // Resolusi SKU item via ID Produk, lalu kumpulkan SKU final.
+    $skus = [];
+    foreach ($prepared as &$pp) {
+        foreach ($pp['o']['items'] as &$it) {
+            if (empty($it['sku']) && !empty($it['shopeeId']) && isset($skuByMpId[$it['shopeeId']])) {
+                $it['sku'] = $skuByMpId[$it['shopeeId']];
+            }
+            if (!empty($it['sku'])) $skus[$it['sku']] = true;
+        }
+        unset($it);
+    }
+    unset($pp);
 
     // Peta SKU -> produk (katalog terkini, mis. dari Master Produk Jakmall).
     $productBySku = [];

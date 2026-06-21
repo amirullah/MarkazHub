@@ -268,10 +268,16 @@ function mp_jakmall_products(array $assoc): array
     foreach ($assoc as $r) {
         $sku = mp_pick($r, ['kode sku', 'sku']);
         if (!$sku) continue;
+        // Kumpulkan semua kolom "Product ID ..." (ID produk per toko marketplace).
+        $mpIds = [];
+        foreach ($r as $k => $v) {
+            if (strpos($k, 'productid') === 0 && $v !== '' && $v !== '-') $mpIds[] = $v;
+        }
         $out[] = [
-            'sku'  => $sku,
-            'name' => mp_pick($r, ['nama produk', 'product name']) ?: $sku,
-            'cost' => mp_num(mp_pick($r, ['harga', 'price', 'cost'])),
+            'sku'   => $sku,
+            'name'  => mp_pick($r, ['nama produk', 'product name']) ?: $sku,
+            'cost'  => mp_num(mp_pick($r, ['harga', 'price', 'cost'])),
+            'mpIds' => $mpIds,
         ];
     }
     return $out;
@@ -376,8 +382,10 @@ function mp_sellerfee_items(array $rows): array
         $no = mp_pick($r, ['no. pesanan']);
         $name = mp_pick($r, ['nama produk']);
         if (!$no || !$name || $name === '-') continue;
+        $pid = mp_pick($r, ['id produk', 'product id']);
         $byOrder[$no][] = [
             'sku'       => null,
+            'shopeeId'  => ($pid && $pid !== '-') ? $pid : null,
             'name'      => $name,
             'qty'       => 1,
             'unitPrice' => 0.0,

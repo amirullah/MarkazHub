@@ -97,6 +97,15 @@ CREATE TABLE order_items (
     REFERENCES products(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Pemetaan ID Produk marketplace (mis. Product ID Shopee per toko) -> SKU,
+-- diisi dari Master Produk Jakmall. Dipakai mencocokkan item Laporan Penghasilan
+-- (yang hanya punya ID Produk + nama, tanpa SKU penjual) ke katalog/HPP.
+CREATE TABLE IF NOT EXISTS product_marketplace_ids (
+  marketplace_product_id VARCHAR(64) NOT NULL PRIMARY KEY,
+  sku VARCHAR(190) NOT NULL,
+  KEY idx_pmi_sku (sku)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ============================================================
 -- DATA CONTOH (boleh dihapus jika ingin mulai dari kosong)
 -- ============================================================
