@@ -539,6 +539,30 @@ function handle_clear_data(): void
     }
 }
 
+// Backfill HPP: saat Master Produk Jakmall diimpor, hitung ulang modal (cogs)
+// pesanan SELF yang sudah ada dari katalog terkini. Tanpa ini, file pesanan yang
+// diimpor SEBELUM master tetap ber-HPP 0 (modal tak terhitung -> laba overstate).
+function backfill_hpp(): int
+{
+    $cond = "o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF'";
+    $before = (int) scalar("SELECT COUNT(*) FROM orders o WHERE $cond AND o.cogs=0");
+    // Isi unit_cost item SELF dari katalog (SKU yang cocok), lalu hitung ulang cogs.
+    exec_sql(
+        "UPDATE order_items i
+         JOIN orders o ON o.id = i.order_id
+         JOIN products p ON p.sku = i.sku
+         SET i.unit_cost = p.cost_price
+         WHERE o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF'"
+    );
+    exec_sql(
+        "UPDATE orders o
+         SET o.cogs = COALESCE((SELECT SUM(i.unit_cost*i.qty) FROM order_items i WHERE i.order_id=o.id), 0)
+         WHERE o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF'"
+    );
+    $after = (int) scalar("SELECT COUNT(*) FROM orders o WHERE $cond AND o.cogs=0");
+    return max(0, $before - $after); // jumlah pesanan SELF yang kini ber-HPP
+}
+
 // Backfill: saat Laporan Pesanan Jakmall diimpor, tandai DROPSHIP + isi modal
 // (Total Transaksi Jakmall) pada pesanan LAMA yang cocok. Tanpa ini, laporan
 // Jakmall yang diunggah terpisah dari file pesanan tidak memperbaiki pesanan
@@ -638,7 +662,9 @@ function handle_import(): void
     $msgs = [];
     if ($jakmall) {
         [$ins, $upd] = import_jakmall_products(array_values($jakmall));
-        $msgs[] = "Master produk Jakmall: $ins baru, $upd diperbarui.";
+        $bf = backfill_hpp();
+        $msgs[] = "Master produk Jakmall: $ins baru, $upd diperbarui" .
+            ($bf ? "; $bf pesanan lama (SELF) kini ber-HPP." : ".");
     }
 
     if ($orderSources) {
