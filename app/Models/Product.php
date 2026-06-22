@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToOrganization;
+use App\Services\CategoryClassifier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\Activitylog\LogOptions;
@@ -11,6 +12,20 @@ use Spatie\Activitylog\Traits\LogsActivity;
 class Product extends Model
 {
     use BelongsToOrganization, LogsActivity;
+
+    protected static function booted(): void
+    {
+        // Setiap produk WAJIB punya kategori: bila kosong, sistem memilih otomatis
+        // dari nama produk. User tetap bisa mengubahnya.
+        static::saving(function (Product $product): void {
+            if (empty($product->category_id) && ! empty($product->name)) {
+                $orgId = (int) ($product->organization_id ?: (auth()->user()->organization_id ?? 0));
+                if ($orgId > 0) {
+                    $product->category_id = app(CategoryClassifier::class)->categoryIdFor((string) $product->name, $orgId);
+                }
+            }
+        });
+    }
 
     // organization_id sengaja TIDAK fillable — diisi otomatis oleh BelongsToOrganization.
     protected $fillable = [

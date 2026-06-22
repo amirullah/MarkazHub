@@ -56,8 +56,8 @@ class ProductForm
                     ->relationship('category', 'name')
                     ->searchable()
                     ->preload()
-                    ->helperText('Dipakai untuk estimasi biaya admin otomatis (sesuai % kategori).')
-                    ->placeholder('— pilih kategori —'),
+                    ->helperText('Untuk estimasi biaya admin. Jika dikosongkan, sistem memilih otomatis dari nama produk.')
+                    ->placeholder('— otomatis dari nama produk —'),
                 Toggle::make('active')
                     ->label('Aktif')
                     ->default(true),
