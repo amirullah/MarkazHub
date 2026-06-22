@@ -38,6 +38,8 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->sidebarCollapsibleOnDesktop()
             ->sidebarWidth('13rem')
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('30s')
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
                 fn (): string => view('auth.google-button')->render(),

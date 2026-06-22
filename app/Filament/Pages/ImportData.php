@@ -96,10 +96,14 @@ class ImportData extends Page
 
         $ok = collect($this->report)->where('ok', true)->count();
         $fail = collect($this->report)->where('ok', false)->count();
-        Notification::make()
+        $body = implode(' ', array_filter([$result['summary']['jakmall'] ?? null, $result['summary']['orders'] ?? null, $result['summary']['dropship'] ?? null]));
+
+        $notif = Notification::make()
             ->title("Import selesai: {$ok} berhasil, {$fail} gagal")
-            ->body(implode(' ', array_filter([$result['summary']['jakmall'] ?? null, $result['summary']['orders'] ?? null, $result['summary']['dropship'] ?? null])))
-            ->success()
-            ->send();
+            ->body($body)
+            ->icon('heroicon-o-arrow-down-tray')
+            ->{$fail ? 'warning' : 'success'}();
+        $notif->send();                              // toast sekarang
+        $notif->sendToDatabase(auth()->user());      // tersimpan di lonceng
     }
 }
