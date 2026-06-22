@@ -15,7 +15,14 @@ use App\Models\Order;
  */
 class AdminFeeEstimator
 {
-    /** Estimasi biaya admin satu pesanan (Rp). 0 jika tak ada kategori yang cocok. */
+    /**
+     * Biaya proses pesanan per pesanan (Rp). Sumber resmi 2026: Shopee & Tokopedia/
+     * TikTok sama-sama Rp1.250 per pesanan terselesaikan. Komponen variabel lain
+     * (komisi dinamis, biaya logistik TikTok) TIDAK diestimasi karena tak pasti.
+     */
+    public const ORDER_PROCESSING_FEE = 1250.0;
+
+    /** Estimasi biaya admin satu pesanan (Rp): Σ(item × % kategori) + biaya proses. */
     public function estimate(Order $order): float
     {
         $order->loadMissing('items.product.category');
@@ -29,6 +36,11 @@ class AdminFeeEstimator
             $rate = $category->feeForMarketplace($order->marketplace);
             $revenue = (float) $item->qty * (float) $item->unit_price;
             $fee += $revenue * $rate / 100;
+        }
+
+        // Tambah biaya proses pesanan (per pesanan) bila ada komponen biaya kategori.
+        if ($fee > 0) {
+            $fee += self::ORDER_PROCESSING_FEE;
         }
 
         return round($fee, 2);
