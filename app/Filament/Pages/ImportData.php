@@ -20,7 +20,7 @@ class ImportData extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowDownTray;
 
-    protected static ?string $navigationLabel = 'Import Laporan';
+    protected static ?string $navigationLabel = 'Import';
 
     protected static ?string $title = 'Import Laporan';
 

@@ -15,7 +15,7 @@ class Insight extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedLightBulb;
 
-    protected static ?string $navigationLabel = 'Insight & Produk Merugi';
+    protected static ?string $navigationLabel = 'Insight';
 
     protected static ?string $title = 'Insight & Produk Merugi';
 

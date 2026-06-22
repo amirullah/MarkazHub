@@ -20,7 +20,7 @@ class ProductResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCube;
 
-    protected static ?string $navigationLabel = 'Produk & HPP';
+    protected static ?string $navigationLabel = 'Produk';
 
     protected static ?string $modelLabel = 'Produk';
 
