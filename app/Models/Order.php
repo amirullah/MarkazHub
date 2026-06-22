@@ -8,10 +8,19 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Order extends Model
 {
-    use BelongsToOrganization, SoftDeletes;
+    use BelongsToOrganization, SoftDeletes, LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['status', 'fulfillment', 'product_revenue', 'cogs', 'admin_fee', 'dropship_cost', 'note'])
+            ->logOnlyDirty()->dontSubmitEmptyLogs()->useLogName('pesanan');
+    }
 
     protected $fillable = [
         'organization_id', 'store_id', 'external_no', 'marketplace', 'status', 'fulfillment',
