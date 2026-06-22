@@ -102,13 +102,18 @@ class OrdersTable
                         'PAID' => 'Dibayar',
                         'PENDING' => 'Menunggu',
                     ]),
-                SelectFilter::make('marketplace')
+                SelectFilter::make('channel')
                     ->label('Channel')
                     ->options([
                         'SHOPEE' => 'Shopee',
-                        'TOKOPEDIA' => 'Tokopedia',
-                        'TIKTOK' => 'TikTok',
-                    ]),
+                        'TOKOTIKTOK' => 'Tokopedia/TikTok',
+                    ])
+                    ->query(fn (Builder $q, array $data): Builder => $q->when(
+                        $data['value'] ?? null,
+                        fn (Builder $q, $v): Builder => $v === 'SHOPEE'
+                            ? $q->where('marketplace', 'SHOPEE')
+                            : $q->whereIn('marketplace', ['TOKOPEDIA', 'TIKTOK']),
+                    )),
                 SelectFilter::make('fulfillment')
                     ->label('Pemenuhan')
                     ->options([
@@ -120,16 +125,33 @@ class OrdersTable
                     ->placeholder('Semua')
                     ->trueLabel('Final')
                     ->falseLabel('Estimasi (belum ada Laporan Penghasilan)'),
+                SelectFilter::make('periode')
+                    ->label('Periode')
+                    ->options([
+                        'minggu_ini' => 'Minggu ini',
+                        'bulan_ini' => 'Bulan ini',
+                        'tahun_ini' => 'Tahun ini',
+                        '30hari' => '30 hari terakhir',
+                        'minggu_lalu' => 'Minggu lalu',
+                        'bulan_lalu' => 'Bulan lalu',
+                        'tahun_lalu' => 'Tahun lalu',
+                    ])
+                    ->query(fn (Builder $q, array $data): Builder => $q->when(
+                        $data['value'] ?? null,
+                        fn (Builder $q, $v): Builder => self::applyPeriode($q, $v),
+                    )),
                 Filter::make('order_date')
+                    ->label('Rentang tanggal kustom')
                     ->schema([
-                        DatePicker::make('from')->label('Dari tanggal'),
-                        DatePicker::make('until')->label('Sampai tanggal'),
+                        DatePicker::make('from')->label('Dari tanggal')->native(false),
+                        DatePicker::make('until')->label('Sampai tanggal')->native(false),
                     ])
                     ->query(fn (Builder $q, array $data): Builder => $q
                         ->when($data['from'] ?? null, fn (Builder $q, $d): Builder => $q->whereDate('order_date', '>=', $d))
                         ->when($data['until'] ?? null, fn (Builder $q, $d): Builder => $q->whereDate('order_date', '<=', $d))),
                 TrashedFilter::make()->label('Terhapus'),
             ])
+            ->filtersFormColumns(2)
             ->recordActions([
                 ViewAction::make(),
             ])
@@ -138,5 +160,20 @@ class OrdersTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /** Terapkan preset periode ke query — filter cepat tanpa pilih tanggal manual. */
+    private static function applyPeriode(Builder $q, string $v): Builder
+    {
+        return match ($v) {
+            'minggu_ini' => $q->whereBetween('order_date', [now()->startOfWeek(), now()->endOfWeek()]),
+            'bulan_ini' => $q->whereBetween('order_date', [now()->startOfMonth(), now()->endOfMonth()]),
+            'tahun_ini' => $q->whereBetween('order_date', [now()->startOfYear(), now()->endOfYear()]),
+            '30hari' => $q->where('order_date', '>=', now()->subDays(30)->startOfDay()),
+            'minggu_lalu' => $q->whereBetween('order_date', [now()->subWeek()->startOfWeek(), now()->subWeek()->endOfWeek()]),
+            'bulan_lalu' => $q->whereBetween('order_date', [now()->subMonthNoOverflow()->startOfMonth(), now()->subMonthNoOverflow()->endOfMonth()]),
+            'tahun_lalu' => $q->whereBetween('order_date', [now()->subYear()->startOfYear(), now()->subYear()->endOfYear()]),
+            default => $q,
+        };
     }
 }
