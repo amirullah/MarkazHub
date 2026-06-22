@@ -7,6 +7,9 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Tables\Columns\Summarizers\Count;
+use Filament\Tables\Columns\Summarizers\Sum;
+use Filament\Tables\Columns\Summarizers\Summarizer;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -14,6 +17,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class OrdersTable
 {
@@ -26,7 +30,8 @@ class OrdersTable
                     ->label('No. Pesanan')
                     ->searchable()
                     ->copyable()
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->summarize(Count::make()->label('Jumlah pesanan')),
                 TextColumn::make('order_date')
                     ->label('Tanggal')
                     ->date('d M Y')
@@ -72,7 +77,12 @@ class OrdersTable
                     ->label('Omzet')
                     ->formatStateUsing(fn ($state): string => 'Rp ' . number_format((float) $state, 0, ',', '.'))
                     ->sortable()
-                    ->alignEnd(),
+                    ->alignEnd()
+                    ->summarize(
+                        Sum::make()
+                            ->label('Total omzet')
+                            ->formatStateUsing(fn ($state): string => 'Rp ' . number_format((float) $state, 0, ',', '.'))
+                    ),
                 TextColumn::make('profit')
                     ->label('Laba')
                     ->formatStateUsing(fn ($state): string => 'Rp ' . number_format((float) $state, 0, ',', '.'))
@@ -81,7 +91,13 @@ class OrdersTable
                     ->color(fn ($state): string => (float) $state < 0 ? 'danger' : 'success')
                     ->sortable(query: fn (Builder $q, string $direction): Builder => $q->orderByRaw(
                         ProfitService::SQL_PROFIT . ' ' . $direction
-                    )),
+                    ))
+                    ->summarize(
+                        Summarizer::make()
+                            ->label('Total laba')
+                            ->using(fn ($query): float => (float) $query->sum(DB::raw(ProfitService::SQL_PROFIT)))
+                            ->formatStateUsing(fn ($state): string => 'Rp ' . number_format((float) $state, 0, ',', '.'))
+                    ),
                 TextColumn::make('income_verified')
                     ->label('Laba Final')
                     ->badge()

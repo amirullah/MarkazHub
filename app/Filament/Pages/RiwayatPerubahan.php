@@ -24,6 +24,15 @@ class RiwayatPerubahan extends Page
      */
     public const CHANGELOG = [
         [
+            'version' => '1.8',
+            'date' => '23 Jun 2026',
+            'title' => 'Detail produk & total pesanan',
+            'changes' => [
+                'Detail produk (item) kini tampil di setiap pesanan: SKU, nama, qty, harga, subtotal, HPP.',
+                'Tabel Pesanan menampilkan ringkasan total (jumlah pesanan, total omzet, total laba) yang mengikuti filter — mis. filter 1 minggu menampilkan total minggu itu.',
+            ],
+        ],
+        [
             'version' => '1.7',
             'date' => '23 Jun 2026',
             'title' => 'Kategori resmi lengkap & biaya tambahan',
