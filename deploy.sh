@@ -38,6 +38,8 @@ find . -type f \
   ! -path './.git/*' \
   ! -path './.claude/*' \
   ! -path './contoh file/*' \
+  ! -path './tests/*' \
+  ! -path './docs/*' \
   ! -name '*.xlsx' ! -name '*.xls' \
 | while read -r f; do
     rel="${f#./}"

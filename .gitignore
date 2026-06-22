@@ -19,3 +19,7 @@ contoh file/
 
 # Skrip scratch/tes sementara
 _*.php
+
+# Snapshot data nyata utk validasi golden (data bisnis) — jangan commit/push
+tests/golden/*_snapshot.json
+tests/golden/*_real*.json
