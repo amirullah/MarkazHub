@@ -50,10 +50,22 @@ class ImportData extends Page
                         ->label('File ekspor (.xlsx / .csv) — boleh beberapa sekaligus')
                         ->multiple()
                         ->storeFiles(false)
-                        ->acceptedFileTypes([
-                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                            'application/vnd.ms-excel', 'text/csv', 'application/csv', 'text/plain',
-                            'application/octet-stream',
+                        ->helperText('Pilih file ekspor Shopee / Tokopedia / TikTok (Excel .xlsx/.xls atau CSV). File beda channel otomatis dilewati saat proses.')
+                        // Validasi berdasarkan EKSTENSI (pasti) — bukan MIME browser yang rapuh
+                        // (Windows sering melaporkan .xlsx sebagai application/x-zip-compressed).
+                        ->rules([
+                            function (string $attribute, $value, \Closure $fail): void {
+                                $files = is_array($value) ? $value : [$value];
+                                foreach ($files as $file) {
+                                    if (! $file instanceof \Illuminate\Http\UploadedFile) {
+                                        continue;
+                                    }
+                                    $ext = strtolower($file->getClientOriginalExtension());
+                                    if (! in_array($ext, ['xlsx', 'xls', 'csv', 'txt'], true)) {
+                                        $fail('Format file "' . $file->getClientOriginalName() . '" tidak didukung (.' . $ext . '). Gunakan Excel (.xlsx, .xls) atau CSV.');
+                                    }
+                                }
+                            },
                         ])
                         ->required(),
                     Toggle::make('update_old_hpp')
