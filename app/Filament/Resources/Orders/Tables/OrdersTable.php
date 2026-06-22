@@ -81,7 +81,7 @@ class OrdersTable
                     ->alignEnd()
                     ->weight('bold')
                     ->color(fn ($state): string => (float) $state < 0 ? 'danger' : 'success')
-                    ->sortable(query: fn (Builder $q, string $direction): Builder => $q->orderByRaw(
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw(
                         ProfitService::SQL_PROFIT . ' ' . $direction
                     )),
                 TextColumn::make('income_verified')
