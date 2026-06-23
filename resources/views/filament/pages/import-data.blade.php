@@ -5,10 +5,22 @@
         $fileEx = 'font-family:monospace;font-size:.72rem;background:#f1f5f9;border-radius:.3rem;padding:.05rem .35rem;color:#334155';
         $btnWrap = 'max-width:16rem';
         $dropship = \App\Models\Organization::currentUsesDropship();
+        $hasStores = \App\Models\Store::query()->exists();
+        $storeUrl = \App\Filament\Resources\Stores\StoreResource::getUrl('create');
     @endphp
 
     <div style="display:flex;flex-direction:column;gap:1rem;max-width:760px">
         <p style="margin:0;color:#475569;font-size:.9rem">Pilih jenis impor sesuai file Anda. Tiap kotak punya tombolnya sendiri — tinggal klik di kotak yang sesuai.</p>
+
+        @unless ($hasStores)
+            <div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:.85rem;padding:1rem 1.2rem">
+                <div style="font-weight:700;color:#92400e">🏪 Buat toko dulu</div>
+                <div style="font-size:.85rem;color:#78350f;margin:.3rem 0 .75rem;max-width:62ch">
+                    Anda belum punya toko. Buat toko dulu (pilih channel: <strong>Shopee</strong> atau <strong>Tokopedia/TikTok</strong>) agar bisa mengimpor <strong>Laporan Marketplace</strong>. Impor <strong>Daftar Produk</strong> &amp; <strong>Dropship</strong> tetap bisa tanpa toko.
+                </div>
+                <a href="{{ $storeUrl }}" style="display:inline-block;background:#2563eb;color:#fff;font-weight:600;font-size:.85rem;padding:.5rem 1rem;border-radius:.5rem;text-decoration:none">+ Buat Toko</a>
+            </div>
+        @endunless
 
         {{-- ===== 1) Laporan Marketplace ===== --}}
         <div style="{{ $card }};border-left:4px solid #2563eb">

@@ -60,6 +60,8 @@ class ImportData extends Page
             ->icon(Heroicon::OutlinedArrowUpTray)
             ->color('primary')
             ->extraAttributes(['class' => 'justify-center', 'style' => 'min-width:16rem'])
+            // Butuh toko tujuan. Bila belum ada toko, tombol dinonaktifkan + pemandu tampil di halaman.
+            ->disabled(fn (): bool => ! Store::query()->exists())
             ->modalHeading('Impor laporan marketplace')
             ->modalSubmitActionLabel('Impor sekarang')
             ->schema([
