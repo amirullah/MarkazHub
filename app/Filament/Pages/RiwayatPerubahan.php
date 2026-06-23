@@ -31,6 +31,7 @@ class RiwayatPerubahan extends Page
                 'Halaman Pesanan: kartu total (Jumlah Pesanan, Omzet, Laba) di atas tabel yang mengikuti filter; filter ringkas (collapsible) & berlaku seketika; detail produk tampil di tiap pesanan; total mengikuti periode yang dipilih.',
                 'Estimasi biaya admin per kategori produk (termasuk biaya proses Rp1.250); 26 kategori resmi untuk semua akun; sistem memilih kategori produk otomatis.',
                 'Estimasi biaya lebih akurat: kini mengikuti struktur biaya nyata marketplace — Shopee (Biaya Administrasi + Biaya Layanan + Proses) & Tokopedia/TikTok (Komisi + Komisi Dinamis + Proses). Biaya Layanan/Komisi Dinamis bisa diatur di Pengaturan. Pesanan batal otomatis berbiaya Rp0; pesanan berjalan yang produknya belum dikenal tetap diestimasi (tarif rata-rata).',
+                'BARU — Kalibrasi Tarif dari Laporan Penghasilan: di menu Pengaturan, sistem bisa menghitung tarif biaya EFEKTIF dari pesanan Anda yang sudah ada laporannya, lalu memakainya untuk estimasi. Paling akurat karena pakai data toko Anda sendiri (terbukti reproduksi biaya asli dengan selisih <2%).',
                 'Halaman Impor dirapikan untuk awam: 3 menu jelas (Laporan Marketplace / Daftar Produk / Dropship), contoh nama file, tombol Unduh Format File (Excel), dan notifikasi yang lebih jelas.',
                 'Fitur Kosongkan Data (reset) dengan konfirmasi & aman per akun; tampilan dirapikan agar lebih menarik dan hemat tempat.',
             ],

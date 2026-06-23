@@ -97,6 +97,98 @@ class AdminFeeEstimator
     }
 
     /**
+     * KALIBRASI tarif dari data NYATA: untuk pesanan yang sudah punya Laporan Penghasilan
+     * (income_verified, biaya asli), hitung tarif biaya EFEKTIF (admin_fee/omzet) lalu
+     * tulis ke tarif per kategori. Tarif kategori jadi tarif ALL-IN (komisi + biaya layanan +
+     * komisi dinamis sudah termasuk), maka komponen tambahan (service/dynamic) DINOLKAN agar
+     * tak dobel. Per-kategori dipakai bila datanya cukup (single-kategori ≥ $minOrders), selain
+     * itu pakai rata-rata channel. Hanya pesanan COMPLETED beromzet & berbiaya yang dipakai.
+     */
+    public function calibrateFromIncome(int $orgId, int $minOrders = 30): array
+    {
+        $verified = fn (string $ch) => Order::withoutGlobalScopes()
+            ->where('organization_id', $orgId)->where('income_verified', true)
+            ->where('marketplace', $ch)->where('status', 'COMPLETED')
+            ->where('product_revenue', '>', 0)->where('admin_fee', '>', 0);
+
+        // Rata-rata tarif variabel per channel (cadangan utk kategori minim data).
+        $channelRate = [];
+        foreach (['SHOPEE', 'TIKTOKTOKO'] as $ch) {
+            $r = $verified($ch)->selectRaw('count(*) n, sum(product_revenue) rev, sum(admin_fee) fee')->first();
+            $channelRate[$ch] = ($r && $r->n > 0 && $r->rev > 0)
+                ? max(0.0, ($r->fee - self::ORDER_PROCESSING_FEE * $r->n) / $r->rev * 100)
+                : null;
+        }
+
+        // Tarif per (channel, kategori) dari pesanan single-kategori.
+        $orders = Order::withoutGlobalScopes()->where('organization_id', $orgId)
+            ->where('income_verified', true)->where('status', 'COMPLETED')
+            ->where('product_revenue', '>', 0)->where('admin_fee', '>', 0)
+            ->select('id', 'marketplace', 'product_revenue', 'admin_fee')->get();
+
+        $catSet = [];
+        foreach ($orders->pluck('id')->chunk(3000) as $chunk) {
+            $rows = \DB::table('order_items as oi')->join('products as p', 'p.id', '=', 'oi.product_id')
+                ->whereIn('oi.order_id', $chunk->all())->whereNotNull('p.category_id')
+                ->select('oi.order_id', 'p.category_id')->distinct()->get();
+            foreach ($rows as $x) {
+                $catSet[$x->order_id][$x->category_id] = true;
+            }
+        }
+
+        $agg = [];
+        foreach ($orders as $o) {
+            $cats = array_keys($catSet[$o->id] ?? []);
+            if (count($cats) !== 1) {
+                continue; // hanya pesanan satu-kategori (atribusi bersih)
+            }
+            $key = $o->marketplace . '|' . $cats[0];
+            $agg[$key]['n'] = ($agg[$key]['n'] ?? 0) + 1;
+            $agg[$key]['rev'] = ($agg[$key]['rev'] ?? 0) + (float) $o->product_revenue;
+            $agg[$key]['fee'] = ($agg[$key]['fee'] ?? 0) + (float) $o->admin_fee;
+        }
+        $perCat = [];
+        foreach ($agg as $key => $v) {
+            if ($v['n'] < $minOrders || $v['rev'] <= 0) {
+                continue;
+            }
+            [$ch, $cid] = explode('|', $key);
+            $perCat[$cid][$ch] = max(0.0, ($v['fee'] - self::ORDER_PROCESSING_FEE * $v['n']) / $v['rev'] * 100);
+        }
+
+        // Tulis tarif ke tiap kategori (per-kategori bila ada; selain itu rata-rata channel).
+        $cats = 0;
+        $detailCats = 0;
+        foreach (\DB::table('categories')->where('organization_id', $orgId)->get() as $cat) {
+            $s = $perCat[$cat->id]['SHOPEE'] ?? $channelRate['SHOPEE'] ?? (float) $cat->fee_shopee;
+            $t = $perCat[$cat->id]['TIKTOKTOKO'] ?? $channelRate['TIKTOKTOKO'] ?? (float) $cat->fee_tokotiktok;
+            \DB::table('categories')->where('id', $cat->id)->update([
+                'fee_shopee' => round($s, 2), 'fee_tokotiktok' => round($t, 2), 'updated_at' => now(),
+            ]);
+            $cats++;
+            if (isset($perCat[$cat->id])) {
+                $detailCats++;
+            }
+        }
+
+        // Tarif kategori kini ALL-IN → nolkan komponen tambahan agar tak dobel-hitung.
+        \DB::table('organizations')->where('id', $orgId)->update([
+            'fee_shopee_service_pct' => 0, 'fee_tokotiktok_dynamic_pct' => 0, 'updated_at' => now(),
+        ]);
+
+        $re = $this->applyToOrg($orgId);
+
+        return [
+            'categories' => $cats,
+            'from_data' => $detailCats,
+            'shopee_avg' => round($channelRate['SHOPEE'] ?? 0, 2),
+            'tokotiktok_avg' => round($channelRate['TIKTOKTOKO'] ?? 0, 2),
+            'reestimated' => $re['updated'],
+            'total' => $re['total'],
+        ];
+    }
+
+    /**
      * Hitung ulang estimasi untuk SEMUA pesanan org yang BELUM final (overwrite estimasi lama
      * agar formula terbaru diterapkan; pesanan batal otomatis jadi 0). Pesanan dengan Laporan
      * Penghasilan (income_verified) TIDAK disentuh. saveQuietly agar tak membanjiri log.

@@ -26,14 +26,42 @@ class Pengaturan extends Page
 
     public function getViewData(): array
     {
+        $orgId = (int) auth()->user()->organization_id;
+
         return [
-            'org' => Organization::find(auth()->user()->organization_id),
+            'org' => Organization::find($orgId),
+            'avgShopee' => round((float) \App\Models\Category::withoutGlobalScopes()->where('organization_id', $orgId)->avg('fee_shopee'), 2),
+            'avgToko' => round((float) \App\Models\Category::withoutGlobalScopes()->where('organization_id', $orgId)->avg('fee_tokotiktok'), 2),
         ];
     }
 
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('kalibrasi')
+                ->label('Kalibrasi Tarif dari Laporan')
+                ->icon(Heroicon::OutlinedSparkles)
+                ->color('primary')
+                ->requiresConfirmation()
+                ->modalHeading('Kalibrasi tarif biaya dari Laporan Penghasilan')
+                ->modalDescription('Menghitung tarif biaya EFEKTIF dari pesanan Anda yang SUDAH punya Laporan Penghasilan (biaya asli), lalu memakainya untuk mengestimasi pesanan yang belum ada laporannya. Ini PALING AKURAT karena memakai data toko Anda sendiri (tarif per kategori = komisi + biaya layanan + komisi dinamis, sudah jadi satu). Butuh cukup banyak pesanan ber-Laporan Penghasilan.')
+                ->modalSubmitActionLabel('Kalibrasi sekarang')
+                ->action(function (): void {
+                    $res = app(AdminFeeEstimator::class)->calibrateFromIncome((int) auth()->user()->organization_id);
+                    if (($res['shopee_avg'] ?? 0) <= 0 && ($res['tokotiktok_avg'] ?? 0) <= 0) {
+                        Notification::make()
+                            ->title('Belum bisa dikalibrasi')
+                            ->body('Belum ada cukup pesanan ber-Laporan Penghasilan untuk menghitung tarif. Impor Laporan Penghasilan dulu, lalu coba lagi.')
+                            ->warning()->send();
+                        return;
+                    }
+                    Notification::make()
+                        ->title('Tarif berhasil dikalibrasi dari data Anda')
+                        ->body("Biaya efektif rata-rata: Shopee {$res['shopee_avg']}% · Tokopedia/TikTok {$res['tokotiktok_avg']}% (+ Rp1.250/pesanan). "
+                            . "{$res['from_data']} kategori memakai tarif spesifik dari data, sisanya rata-rata channel. Estimasi {$res['reestimated']} pesanan diperbarui.")
+                        ->success()->send();
+                }),
+
             Action::make('ubah')
                 ->label('Ubah Pengaturan')
                 ->icon(Heroicon::OutlinedPencilSquare)
