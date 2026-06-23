@@ -25,20 +25,24 @@ class Backup extends Page
 
     protected static ?int $navigationSort = 7;
 
-    protected function getHeaderActions(): array
+    public function downloadAction(): Action
     {
-        return [
-            Action::make('download')
-                ->label('Unduh Backup (.sql)')
-                ->icon(Heroicon::OutlinedArrowDownTray)
-                ->color('primary')
-                ->action(fn (): StreamedResponse => $this->downloadBackup()),
+        return Action::make('download')
+            ->label('Unduh Backup (.sql)')
+            ->icon(Heroicon::OutlinedArrowDownTray)
+            ->color('primary')
+            ->extraAttributes(['class' => 'justify-center', 'style' => 'min-width:16rem'])
+            ->action(fn (): StreamedResponse => $this->downloadBackup());
+    }
 
-            Action::make('restore')
-                ->label('Pulihkan dari Backup')
-                ->icon(Heroicon::OutlinedArrowUpTray)
-                ->color('gray')
-                ->modalHeading('Pulihkan data dari file backup')
+    public function restoreAction(): Action
+    {
+        return Action::make('restore')
+            ->label('Pulihkan dari Backup')
+            ->icon(Heroicon::OutlinedArrowUpTray)
+            ->color('warning')
+            ->extraAttributes(['class' => 'justify-center', 'style' => 'min-width:16rem'])
+            ->modalHeading('Pulihkan data dari file backup')
                 ->modalDescription('PERHATIAN: data Anda saat ini (toko, produk, pesanan) akan DIGANTI dengan isi file backup. Pastikan file benar.')
                 ->modalSubmitActionLabel('Ganti & pulihkan sekarang')
                 ->schema([
@@ -62,13 +66,17 @@ class Backup extends Page
                         ->rule('in:PULIHKAN')
                         ->validationMessages(['in' => 'Ketik persis: PULIHKAN']),
                 ])
-                ->action(fn (array $data) => $this->runRestore($data)),
+                ->action(fn (array $data) => $this->runRestore($data));
+    }
 
-            Action::make('clear')
-                ->label('Kosongkan Data')
-                ->icon(Heroicon::OutlinedTrash)
-                ->color('danger')
-                ->modalHeading('Kosongkan data')
+    public function clearAction(): Action
+    {
+        return Action::make('clear')
+            ->label('Kosongkan Data')
+            ->icon(Heroicon::OutlinedTrash)
+            ->color('danger')
+            ->extraAttributes(['class' => 'justify-center', 'style' => 'min-width:16rem'])
+            ->modalHeading('Kosongkan data')
                 ->modalDescription('PERHATIAN: data akan DIHAPUS PERMANEN dan tidak bisa dibatalkan. Sangat disarankan "Unduh Backup" dulu sebelum melanjutkan.')
                 ->modalSubmitActionLabel('Kosongkan sekarang')
                 ->modalIcon(Heroicon::OutlinedTrash)
@@ -88,8 +96,7 @@ class Backup extends Page
                         ->rule('in:KOSONGKAN')
                         ->validationMessages(['in' => 'Ketik persis: KOSONGKAN']),
                 ])
-                ->action(fn (array $data) => $this->runClear($data)),
-        ];
+                ->action(fn (array $data) => $this->runClear($data));
     }
 
     protected function downloadBackup(): StreamedResponse

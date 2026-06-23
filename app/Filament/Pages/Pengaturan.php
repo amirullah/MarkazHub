@@ -35,13 +35,13 @@ class Pengaturan extends Page
         ];
     }
 
-    protected function getHeaderActions(): array
+    public function kalibrasiAction(): Action
     {
-        return [
-            Action::make('kalibrasi')
+        return Action::make('kalibrasi')
                 ->label('Kalibrasi Tarif dari Laporan')
                 ->icon(Heroicon::OutlinedSparkles)
                 ->color('primary')
+                ->extraAttributes(['class' => 'justify-center', 'style' => 'min-width:16rem'])
                 ->requiresConfirmation()
                 ->modalHeading('Kalibrasi tarif biaya dari Laporan Penghasilan')
                 ->modalDescription('Menghitung tarif biaya EFEKTIF dari pesanan Anda yang SUDAH punya Laporan Penghasilan (biaya asli), lalu memakainya untuk mengestimasi pesanan yang belum ada laporannya. Ini PALING AKURAT karena memakai data toko Anda sendiri (tarif per kategori = komisi + biaya layanan + komisi dinamis, sudah jadi satu). Butuh cukup banyak pesanan ber-Laporan Penghasilan.')
@@ -60,11 +60,16 @@ class Pengaturan extends Page
                         ->body("Biaya efektif rata-rata: Shopee {$res['shopee_avg']}% · Tokopedia/TikTok {$res['tokotiktok_avg']}% (+ Rp1.250/pesanan). "
                             . "{$res['from_data']} kategori memakai tarif spesifik dari data, sisanya rata-rata channel. Estimasi {$res['reestimated']} pesanan diperbarui.")
                         ->success());
-                }),
+                });
+    }
 
-            Action::make('ubah')
+    public function ubahAction(): Action
+    {
+        return Action::make('ubah')
                 ->label('Ubah Pengaturan')
                 ->icon(Heroicon::OutlinedPencilSquare)
+                ->color('primary')
+                ->extraAttributes(['class' => 'justify-center', 'style' => 'min-width:16rem'])
                 ->modalWidth('lg')
                 ->fillForm(function (): array {
                     $org = Organization::find(auth()->user()->organization_id);
@@ -108,7 +113,6 @@ class Pengaturan extends Page
                         ->title('Pengaturan biaya disimpan')
                         ->body("Estimasi biaya diperbarui untuk {$res['updated']} pesanan (total Rp" . number_format($res['total'], 0, ',', '.') . '). Muat ulang halaman lain agar tampilan diperbarui.')
                         ->success());
-                }),
-        ];
+                });
     }
 }
