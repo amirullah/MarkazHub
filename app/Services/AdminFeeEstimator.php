@@ -120,6 +120,11 @@ class AdminFeeEstimator
                 : null;
         }
 
+        // Belum ada data Laporan Penghasilan sama sekali → JANGAN ubah apa pun (no-op aman).
+        if (($channelRate['SHOPEE'] ?? null) === null && ($channelRate['TIKTOKTOKO'] ?? null) === null) {
+            return ['categories' => 0, 'from_data' => 0, 'shopee_avg' => 0, 'tokotiktok_avg' => 0, 'reestimated' => 0, 'total' => 0.0];
+        }
+
         // Tarif per (channel, kategori) dari pesanan single-kategori.
         $orders = Order::withoutGlobalScopes()->where('organization_id', $orgId)
             ->where('income_verified', true)->where('status', 'COMPLETED')
