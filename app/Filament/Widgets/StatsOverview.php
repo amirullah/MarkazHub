@@ -21,7 +21,9 @@ class StatsOverview extends StatsOverviewWidget
         $jumlah = (clone $ops)->count();
         $aov = $jumlah > 0 ? $omzet / $jumlah : 0;
         $margin = $omzet > 0 ? ($laba / $omzet * 100) : 0;
-        $returBatal = Order::query()->whereIn('status', ['CANCELLED', 'RETURNED'])->count();
+        $batal = Order::query()->where('status', 'CANCELLED')->count();
+        $retur = Order::query()->where('status', 'RETURNED')->count();
+        $belumFinal = Order::query()->where('income_verified', false)->where('status', '!=', 'CANCELLED')->count();
         $pesananRugi = Order::query()->where('status', 'COMPLETED')->whereRaw(ProfitService::sqlProfit() . ' < 0')->count();
 
         // Sparkline 6 bulan terakhir
@@ -54,10 +56,14 @@ class StatsOverview extends StatsOverviewWidget
                 ->description('pesanan selesai dengan laba minus')
                 ->descriptionIcon('heroicon-m-exclamation-triangle')
                 ->color($pesananRugi > 0 ? 'danger' : 'success'),
-            Stat::make('Retur + Batal', number_format($returBatal, 0, ',', '.'))
-                ->description('tidak dihitung di laba')
-                ->descriptionIcon('heroicon-m-arrow-uturn-left')
+            Stat::make('Pesanan Batal', number_format($batal, 0, ',', '.'))
+                ->description($retur > 0 ? '+ ' . number_format($retur, 0, ',', '.') . ' dikembalikan/retur' : 'tidak dihitung di laba')
+                ->descriptionIcon('heroicon-m-x-circle')
                 ->color('warning'),
+            Stat::make('Laba Belum Final', number_format($belumFinal, 0, ',', '.'))
+                ->description($belumFinal > 0 ? 'masih estimasi — impor Laporan Penghasilan' : 'semua laba sudah final')
+                ->descriptionIcon('heroicon-m-clock')
+                ->color($belumFinal > 0 ? 'warning' : 'success'),
         ];
     }
 

@@ -6,14 +6,12 @@ use App\Services\ProfitService;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
-use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -87,26 +85,33 @@ class OrdersTable
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw(
                         ProfitService::sqlProfit() . ' ' . $direction
                     )),
-                TextColumn::make('income_verified')
-                    ->label('Laba Final')
+                // Status laba: "Final" HANYA bila biaya ASLI + modal lengkap. Pesanan packing
+                // sendiri tanpa HPP → "Perlu data" (laba belum akurat), bukan Final.
+                TextColumn::make('status_laba')
+                    ->label('Status Laba')
                     ->badge()
-                    ->formatStateUsing(fn ($state): string => $state ? 'Final' : 'Estimasi')
-                    ->color(fn ($state): string => $state ? 'success' : 'gray')
-                    ->tooltip(fn ($state): string => $state
-                        ? 'Angka final (Laporan Penghasilan marketplace sudah masuk).'
-                        : 'Masih estimasi (belum ada Laporan Penghasilan).'),
-                TextColumn::make('kelengkapan')
-                    ->label('Kelengkapan')
-                    ->badge()
-                    ->state(fn (\App\Models\Order $record): string => ($g = $record->incompleteness())
-                        ? count($g) . ' perlu data'
-                        : 'Lengkap')
-                    ->color(fn (string $state): string => $state === 'Lengkap' ? 'success' : 'warning')
-                    ->icon(fn (string $state): string => $state === 'Lengkap' ? 'heroicon-m-check-circle' : 'heroicon-m-exclamation-triangle')
+                    ->state(function (\App\Models\Order $record): string {
+                        $gaps = $record->incompleteness();
+                        if (empty($gaps)) {
+                            return 'Final';
+                        }
+                        $dataGaps = array_filter($gaps, fn (string $g): bool => ! str_contains($g, 'ESTIMASI'));
+
+                        return $dataGaps ? 'Perlu data' : 'Estimasi';
+                    })
+                    ->color(fn (string $state): string => match ($state) {
+                        'Final' => 'success',
+                        'Perlu data' => 'warning',
+                        default => 'gray',
+                    })
+                    ->icon(fn (string $state): string => match ($state) {
+                        'Final' => 'heroicon-m-check-circle',
+                        'Perlu data' => 'heroicon-m-exclamation-triangle',
+                        default => 'heroicon-m-clock',
+                    })
                     ->tooltip(fn (\App\Models\Order $record): string => ($g = $record->incompleteness())
-                        ? 'Belum lengkap: ' . implode(' · ', $g)
-                        : 'Data pesanan lengkap')
-                    ->toggleable(),
+                        ? 'Belum: ' . implode(' · ', $g)
+                        : 'Laba final & akurat (biaya asli + modal lengkap).'),
             ])
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('items:id,order_id,product_id'))
             ->filters([
@@ -172,24 +177,11 @@ class OrdersTable
                         $data['value'] ?? null,
                         fn (Builder $query, $v): Builder => self::applyPeriode($query, $v),
                     )),
-                Filter::make('order_date')
-                    ->label('Rentang tanggal kustom')
-                    ->schema([
-                        DatePicker::make('from')->label('Dari tanggal')->native(false),
-                        DatePicker::make('until')->label('Sampai tanggal')->native(false),
-                    ])
-                    ->query(fn (Builder $query, array $data): Builder => $query
-                        ->when($data['from'] ?? null, fn (Builder $query, $d): Builder => $query->whereDate('order_date', '>=', $d))
-                        ->when($data['until'] ?? null, fn (Builder $query, $d): Builder => $query->whereDate('order_date', '<=', $d))),
-                Filter::make('tanpa_item')
-                    ->label('Belum ada item produk')
-                    ->toggle()
-                    ->query(fn (Builder $query): Builder => $query->whereDoesntHave('items')),
-                TrashedFilter::make()->label('Terhapus'),
             ])
-            ->filtersLayout(FiltersLayout::Dropdown)
-            ->filtersFormColumns(2)
-            ->filtersTriggerAction(fn ($action) => $action->label('Filter')->icon('heroicon-m-funnel'))
+            // Filter tampil DI ATAS tabel (tak menutup data), ringkas & padat (sampai 4 kolom),
+            // berlaku seketika. AboveContent agar user langsung lihat filter tersedia.
+            ->filtersLayout(FiltersLayout::AboveContent)
+            ->filtersFormColumns(['default' => 2, 'md' => 3, 'lg' => 4])
             ->deferFilters(false)
             ->recordActions([
                 ViewAction::make(),

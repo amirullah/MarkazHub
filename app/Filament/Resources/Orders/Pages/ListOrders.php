@@ -27,7 +27,10 @@ class ListOrders extends ListRecords
         $count = (clone $query)->count();
         $omzet = (float) (clone $query)->sum('product_revenue');
         $laba = (float) (clone $query)->sum(DB::raw(ProfitService::sqlProfit()));
+        $batal = (clone $query)->where('status', 'CANCELLED')->count();
+        $belumFinal = (clone $query)->where('income_verified', false)->where('status', '!=', 'CANCELLED')->count();
         $rp = fn ($v): string => 'Rp ' . number_format((float) $v, 0, ',', '.');
+        $n = fn ($v): string => number_format((int) $v, 0, ',', '.');
 
         $card = fn (string $label, string $value, string $color, string $icon, string $bg): string =>
             "<div style='flex:1 1 150px;display:flex;align-items:center;gap:.6rem;border:1px solid #e8edf3;border-radius:.7rem;padding:.5rem .75rem;background:#fff'>"
@@ -38,9 +41,11 @@ class ListOrders extends ListRecords
             . '</div></div>';
 
         $html = "<div style='display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.25rem'>"
-            . $card('Jumlah Pesanan', number_format($count, 0, ',', '.'), '#0f172a', '🧾', '#f1f5f9')
+            . $card('Jumlah Pesanan', $n($count), '#0f172a', '🧾', '#f1f5f9')
             . $card('Total Omzet', $rp($omzet), '#2563eb', '💰', '#eff6ff')
             . $card('Total Laba', $rp($laba), $laba < 0 ? '#dc2626' : '#16a34a', '📈', $laba < 0 ? '#fef2f2' : '#f0fdf4')
+            . $card('Pesanan Batal', $n($batal), '#dc2626', '🚫', '#fef2f2')
+            . $card('Laba Belum Final', $n($belumFinal), '#b45309', '⏳', '#fffbeb')
             . '</div>';
 
         return new HtmlString($html);
