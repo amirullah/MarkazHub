@@ -71,6 +71,9 @@ class Pengaturan extends Page
                 ->color('primary')
                 ->extraAttributes(['class' => 'justify-center', 'style' => 'min-width:16rem'])
                 ->modalWidth('lg')
+                ->modalDescription(fn (): string => $this->feesCalibrated()
+                    ? 'Tarif Anda SUDAH dikalibrasi dari Laporan Penghasilan, jadi Biaya Layanan & Komisi Dinamis dikelola otomatis (sudah termasuk dalam tarif per kategori). Di sini Anda cukup mengatur mode dropship. Untuk memperbarui tarif, pakai tombol "Kalibrasi Tarif dari Laporan".'
+                    : 'Atur mode dropship + biaya % TAMBAHAN marketplace (Biaya Layanan Shopee & Komisi Dinamis Tokopedia/TikTok) di luar komisi per kategori. Isi 0 jika tidak berlaku.')
                 ->fillForm(function (): array {
                     $org = Organization::find(auth()->user()->organization_id);
 
@@ -88,31 +91,45 @@ class Pengaturan extends Page
                     TextInput::make('fee_shopee_service_pct')
                         ->label('Shopee — Biaya Layanan (%)')
                         ->numeric()->minValue(0)->maxValue(100)->step('0.01')->suffix('%')->required()
-                        ->helperText('Biaya program (mis. Gratis Ongkir XTRA). Dari struktur Shopee ±10%. Isi 0 jika tidak ikut program.'),
+                        ->visible(fn (): bool => ! $this->feesCalibrated())
+                        ->helperText('Biaya program gratis ongkir (umumnya ±10%, berbatas). Isi 0 bila tidak ikut program.'),
                     TextInput::make('fee_shopee_service_cap')
                         ->label('Shopee — Batas Biaya Layanan (Rp)')
                         ->numeric()->minValue(0)->prefix('Rp')->required()
+                        ->visible(fn (): bool => ! $this->feesCalibrated())
                         ->helperText('Batas maksimum Biaya Layanan per pesanan. Umumnya Rp10.000. Isi 0 jika tanpa batas.'),
                     TextInput::make('fee_tokotiktok_dynamic_pct')
                         ->label('Tokopedia/TikTok — Komisi Dinamis (%)')
                         ->numeric()->minValue(0)->maxValue(100)->step('0.01')->suffix('%')->required()
-                        ->helperText('Komisi tambahan di luar komisi kategori. Dari struktur TikTok ±6,5%. Isi 0 jika tidak berlaku.'),
+                        ->visible(fn (): bool => ! $this->feesCalibrated())
+                        ->helperText('Komisi tambahan di luar komisi kategori (umumnya ±6,5%). Isi 0 bila tidak berlaku.'),
                 ])
                 ->action(function (array $data): void {
                     $org = Organization::find(auth()->user()->organization_id);
                     $org->uses_dropship = (bool) ($data['uses_dropship'] ?? true);
-                    $org->fee_shopee_service_pct = (float) ($data['fee_shopee_service_pct'] ?? 10);
-                    $org->fee_shopee_service_cap = (int) ($data['fee_shopee_service_cap'] ?? 10000);
-                    $org->fee_tokotiktok_dynamic_pct = (float) ($data['fee_tokotiktok_dynamic_pct'] ?? 6.5);
+                    // Field biaya bisa TERSEMBUNYI saat tarif sudah dikalibrasi → pertahankan nilai
+                    // tersimpan (0) bila tak dikirim, JANGAN reset ke default (cegah dobel-hitung).
+                    $org->fee_shopee_service_pct = (float) ($data['fee_shopee_service_pct'] ?? $org->fee_shopee_service_pct);
+                    $org->fee_shopee_service_cap = (int) ($data['fee_shopee_service_cap'] ?? $org->fee_shopee_service_cap);
+                    $org->fee_tokotiktok_dynamic_pct = (float) ($data['fee_tokotiktok_dynamic_pct'] ?? $org->fee_tokotiktok_dynamic_pct);
                     $org->save();
 
                     // Terapkan tarif baru ke estimasi pesanan yang belum final.
                     $res = app(AdminFeeEstimator::class)->applyToOrg((int) $org->id);
 
                     \App\Support\Bell::send(Notification::make()
-                        ->title('Pengaturan biaya disimpan')
+                        ->title('Pengaturan disimpan')
                         ->body("Estimasi biaya diperbarui untuk {$res['updated']} pesanan (total Rp" . number_format($res['total'], 0, ',', '.') . '). Muat ulang halaman lain agar tampilan diperbarui.')
                         ->success());
                 });
+    }
+
+    /** True bila tarif biaya tambahan sudah dikalibrasi (kedua % = 0 → sudah dilebur ke tarif kategori). */
+    private function feesCalibrated(): bool
+    {
+        $org = Organization::find(auth()->user()->organization_id);
+
+        return (float) ($org?->fee_shopee_service_pct ?? 10) == 0.0
+            && (float) ($org?->fee_tokotiktok_dynamic_pct ?? 6.5) == 0.0;
     }
 }
