@@ -10,6 +10,7 @@
             'status' => 'Status', 'fulfillment' => 'Pemenuhan', 'product_revenue' => 'Omzet', 'cogs' => 'HPP',
             'admin_fee' => 'Biaya Admin', 'buyer_name' => 'Nama Pembeli',
         ];
+        $usesJakmall = \App\Models\Organization::currentUsesJakmall();
     @endphp
 
     <x-filament::section>
@@ -28,7 +29,11 @@
                 @forelse ($activities as $a)
                     @php
                         [$evtLabel, $evtColor] = $evt[$a->event] ?? [$a->event, '#64748b'];
-                        $changed = array_map(fn ($k) => $attrLabels[$k] ?? $k, array_keys($a->properties['attributes'] ?? []));
+                        $changedKeys = array_keys($a->properties['attributes'] ?? []);
+                        if (! $usesJakmall) {
+                            $changedKeys = array_filter($changedKeys, fn ($k) => ! in_array($k, ['dropship_cost', 'fulfillment'], true));
+                        }
+                        $changed = array_map(fn ($k) => $attrLabels[$k] ?? $k, $changedKeys);
                     @endphp
                     <tr>
                         <td style="{{ $td }};color:#64748b;white-space:nowrap">{{ $a->created_at?->format('d M Y H:i') }}</td>
