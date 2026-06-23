@@ -26,7 +26,7 @@ class Order extends Model
     protected $fillable = [
         'store_id', 'external_no', 'marketplace', 'status', 'fulfillment',
         'order_date', 'buyer_name', 'product_revenue', 'shipping_charged_to_buyer', 'other_income',
-        'cogs', 'admin_fee', 'shipping_cost_seller', 'voucher_seller_borne', 'dropship_cost',
+        'cogs', 'admin_fee', 'shipping_cost_seller', 'voucher_seller_borne', 'dropship_cost', 'dropship_modal',
         'other_cost', 'income_verified', 'note',
     ];
 
@@ -43,6 +43,7 @@ class Order extends Model
             'shipping_cost_seller' => 'decimal:2',
             'voucher_seller_borne' => 'decimal:2',
             'dropship_cost' => 'decimal:2',
+            'dropship_modal' => 'decimal:2',
             'other_cost' => 'decimal:2',
         ];
     }

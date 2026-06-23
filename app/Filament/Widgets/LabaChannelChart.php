@@ -21,7 +21,7 @@ class LabaChannelChart extends ChartWidget
     {
         $rows = Order::query()
             ->whereNotIn('status', ['CANCELLED', 'RETURNED'])
-            ->selectRaw('marketplace, SUM(' . ProfitService::SQL_PROFIT . ') laba')
+            ->selectRaw('marketplace, SUM(' . ProfitService::sqlProfit() . ') laba')
             ->groupBy('marketplace')
             ->pluck('laba', 'marketplace');
 

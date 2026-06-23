@@ -51,7 +51,18 @@ class OrderInfolist
                 ->description('Pengurang laba')
                 ->columns(3)
                 ->schema([
-                    TextEntry::make('cogs')->label('HPP / Modal')->formatStateUsing($rp),
+                    TextEntry::make('cogs')->label('HPP / Modal')
+                        // Saat Jakmall nonaktif, pesanan dropship dihitung pakai modal historis
+                        // (fallback ke total dropship bila modal historis belum terisi).
+                        ->state(function ($record): float {
+                            $cogs = (float) $record->cogs;
+                            if (\App\Models\Organization::currentUsesJakmall()) {
+                                return $cogs;
+                            }
+                            $modal = (float) $record->dropship_modal;
+                            return $cogs + ($modal > 0 ? $modal : (float) $record->dropship_cost);
+                        })
+                        ->formatStateUsing($rp),
                     TextEntry::make('admin_fee')->label('Biaya Admin')->formatStateUsing($rp)
                         ->tooltip('Untuk pesanan estimasi, sudah termasuk biaya proses Rp1.250/pesanan.'),
                     TextEntry::make('shipping_cost_seller')->label('Ongkir Ditanggung Seller')->formatStateUsing($rp),

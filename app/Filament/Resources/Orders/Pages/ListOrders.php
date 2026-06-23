@@ -26,7 +26,7 @@ class ListOrders extends ListRecords
 
         $count = (clone $query)->count();
         $omzet = (float) (clone $query)->sum('product_revenue');
-        $laba = (float) (clone $query)->sum(DB::raw(ProfitService::SQL_PROFIT));
+        $laba = (float) (clone $query)->sum(DB::raw(ProfitService::sqlProfit()));
         $rp = fn ($v): string => 'Rp ' . number_format((float) $v, 0, ',', '.');
 
         $card = fn (string $label, string $value, string $color, string $icon, string $bg): string =>

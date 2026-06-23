@@ -33,7 +33,12 @@ class Organization extends Model
      */
     public static function currentUsesJakmall(): bool
     {
-        return (bool) (auth()->user()?->organization?->uses_jakmall ?? true);
+        try {
+            return (bool) (auth()->user()?->organization?->uses_jakmall ?? true);
+        } catch (\Throwable $e) {
+            // Tanpa konteks auth (mis. unit test murni) → default Jakmall aktif (perilaku v1).
+            return true;
+        }
     }
 
     public function users(): HasMany

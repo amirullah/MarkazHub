@@ -27,6 +27,40 @@ class ProfitService
     /** Ekspresi SQL net (laba sebelum modal). */
     public const SQL_NET = '(product_revenue + other_income - (admin_fee + shipping_cost_seller + voucher_seller_borne + other_cost))';
 
+    /**
+     * Ekspresi SQL biaya dropship aktif sesuai toggle Jakmall:
+     * - Jakmall AKTIF   → 'dropship_cost' (total ke Jakmall = modal + biaya mitra)
+     * - Jakmall NONAKTIF → modal historis (seolah packing sendiri). Bila modal historis
+     *   belum terisi (0, mis. laporan Jakmall belum di-upload ulang), JATUH ke dropship_cost
+     *   agar biaya tidak hilang & laba tidak menggelembung palsu.
+     * Default 'dropship_cost' (aman tanpa auth / golden test = perilaku v1).
+     */
+    public static function dropshipExpr(): string
+    {
+        return \App\Models\Organization::currentUsesJakmall()
+            ? 'dropship_cost'
+            : 'COALESCE(NULLIF(dropship_modal, 0), dropship_cost)';
+    }
+
+    /**
+     * Ekspresi SQL laba MENGIKUTI toggle Jakmall (untuk dashboard/list/insight).
+     */
+    public static function sqlProfit(): string
+    {
+        return '(product_revenue + other_income - (cogs + admin_fee + shipping_cost_seller + voucher_seller_borne + '
+            . self::dropshipExpr() . ' + other_cost))';
+    }
+
+    /** Biaya dropship efektif (PHP) sesuai toggle Jakmall, dgn fallback aman. */
+    private function effectiveDropship(array|object $o): float
+    {
+        if (\App\Models\Organization::currentUsesJakmall()) {
+            return $this->f($o, 'dropship_cost');
+        }
+        $modal = $this->f($o, 'dropship_modal');
+        return $modal > 0 ? $modal : $this->f($o, 'dropship_cost');
+    }
+
     /** Laba bersih per pesanan (setelah modal). */
     public function profit(array|object $o): float
     {
@@ -52,7 +86,7 @@ class ProfitService
     public function totalCost(array|object $o): float
     {
         return $this->f($o, 'cogs') + $this->f($o, 'admin_fee') + $this->f($o, 'shipping_cost_seller')
-            + $this->f($o, 'voucher_seller_borne') + $this->f($o, 'dropship_cost') + $this->f($o, 'other_cost');
+            + $this->f($o, 'voucher_seller_borne') + $this->effectiveDropship($o) + $this->f($o, 'other_cost');
     }
 
     public function margin(array|object $o): float

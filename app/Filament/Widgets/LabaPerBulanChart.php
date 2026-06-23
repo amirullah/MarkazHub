@@ -25,7 +25,7 @@ class LabaPerBulanChart extends ChartWidget
             ->whereNotIn('status', ['CANCELLED', 'RETURNED'])
             ->selectRaw("DATE_FORMAT(order_date, '%Y-%m') ym")
             ->selectRaw('SUM(product_revenue + other_income) omzet')
-            ->selectRaw('SUM(' . ProfitService::SQL_PROFIT . ') laba')
+            ->selectRaw('SUM(' . ProfitService::sqlProfit() . ') laba')
             ->groupBy('ym')->orderBy('ym')
             ->get()->keyBy('ym');
 

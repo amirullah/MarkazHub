@@ -158,12 +158,13 @@ class OrderImporter
     {
         $n = 0;
         foreach ($dropshipMap as $no => $jak) {
+            $modal = (float) ($jak['productCost'] ?? 0); // Total Harga Produk = modal historis (biaya bila packing sendiri)
             $note = mb_substr('Dropship Jakmall' . (!empty($jak['jakmallCode']) ? ' #' . $jak['jakmallCode'] : '') .
-                ': total Rp' . number_format($jak['total'], 0, ',', '.'), 0, 500);
-            $n += DB::update("UPDATE orders SET fulfillment='DROPSHIP', dropship_cost=?, cogs=0, note=?
+                ': total Rp' . number_format($jak['total'], 0, ',', '.') . ', modal Rp' . number_format($modal, 0, ',', '.'), 0, 500);
+            $n += DB::update("UPDATE orders SET fulfillment='DROPSHIP', dropship_cost=?, dropship_modal=?, cogs=0, note=?
                 WHERE organization_id=? AND external_no=? AND status NOT IN ('CANCELLED','RETURNED') AND deleted_at IS NULL
-                  AND (fulfillment<>'DROPSHIP' OR ABS(dropship_cost - ?) > 1)",
-                [$jak['total'], $note, $this->orgId, (string) $no, $jak['total']]);
+                  AND (fulfillment<>'DROPSHIP' OR ABS(dropship_cost - ?) > 1 OR ABS(dropship_modal - ?) > 1)",
+                [$jak['total'], $modal, $note, $this->orgId, (string) $no, $jak['total'], $modal]);
         }
         return $n;
     }
@@ -237,18 +238,19 @@ class OrderImporter
                     'qty' => $it['qty'], 'qty_assumed' => !empty($it['qtyAssumed']) ? 1 : 0, 'unit_price' => $it['unitPrice'], 'unit_cost' => $unitCost];
             }
 
-            $dropship = 0; $note = $o['note'] ?? null;
+            $dropship = 0; $dropshipModal = 0; $note = $o['note'] ?? null;
             if ($ful === 'DROPSHIP') {
                 $cogs = 0;
                 if ($jak) {
                     $dropship = (float) $jak['total'];
-                    $note = mb_substr('Dropship Jakmall' . (!empty($jak['jakmallCode']) ? ' #' . $jak['jakmallCode'] : '') . ': total Rp' . number_format($jak['total'], 0, ',', '.'), 0, 500);
+                    $dropshipModal = (float) ($jak['productCost'] ?? 0); // modal historis = biaya bila packing sendiri
+                    $note = mb_substr('Dropship Jakmall' . (!empty($jak['jakmallCode']) ? ' #' . $jak['jakmallCode'] : '') . ': total Rp' . number_format($jak['total'], 0, ',', '.') . ', modal Rp' . number_format($dropshipModal, 0, ',', '.'), 0, 500);
                 } elseif ($ex && $ex['fulfillment'] === 'DROPSHIP') {
-                    $dropship = (float) $ex['dropship_cost']; $note = $ex['note'];
+                    $dropship = (float) $ex['dropship_cost']; $dropshipModal = (float) ($ex['dropship_modal'] ?? 0); $note = $ex['note'];
                 } else {
                     foreach ($o['items'] as $it) {
                         $p = (!empty($it['sku']) && isset($productBySku[$it['sku']])) ? $productBySku[$it['sku']] : null;
-                        if ($p) $dropship += (float) $p['dropship_cost'] * $it['qty'];
+                        if ($p) { $dropship += (float) $p['dropship_cost'] * $it['qty']; $dropshipModal += (float) ($p['cost_price'] ?? $p['dropship_cost']) * $it['qty']; }
                     }
                 }
             }
@@ -259,8 +261,8 @@ class OrderImporter
             $status = mp_map_status($o['status'] ?? '');
             $voucher = $o['voucherSellerBorne'] ?? 0; $shipSeller = $o['shippingCostSeller'] ?? 0;
             $otherCost = $o['otherCost'] ?? 0; $otherIncome = $o['otherIncome'] ?? 0;
-            if ($status === 'CANCELLED') { $revenue = 0; $adminFee = 0; $cogs = 0; $dropship = 0; $voucher = 0; $shipSeller = 0; $otherCost = 0; $otherIncome = 0; }
-            if ($status === 'RETURNED') { $cogs = 0; $dropship = 0; }
+            if ($status === 'CANCELLED') { $revenue = 0; $adminFee = 0; $cogs = 0; $dropship = 0; $dropshipModal = 0; $voucher = 0; $shipSeller = 0; $otherCost = 0; $otherIncome = 0; }
+            if ($status === 'RETURNED') { $cogs = 0; $dropship = 0; $dropshipModal = 0; }
 
             // Deteksi perubahan: re-import tanpa data baru = tidak diutak-atik.
             if ($ex) {
@@ -269,18 +271,19 @@ class OrderImporter
                 $same = $ex['fulfillment'] === $ful && (int) $ex['income_verified'] === $verified && $ex['status'] === $status
                     && $r($ex['product_revenue']) === $r($revenue) && $r($ex['admin_fee']) === $r($adminFee)
                     && $r($ex['cogs']) === $r($cogs) && $r($ex['dropship_cost']) === $r($dropship)
+                    && $r($ex['dropship_modal'] ?? 0) === $r($dropshipModal)
                     && $r($ex['other_cost']) === $r($otherCost) && $r($ex['voucher_seller_borne']) === $r($voucher)
                     && count($exItems) === count($items) && $exSku === $newSku && $exQty === $newQty;
                 if ($same) { $unchanged++; continue; }
             }
 
-            DB::transaction(function () use ($ex, $org, $no, $storeId, $storeMarketplace, $status, $ful, $o, $revenue, $adminFee, $cogs, $dropship, $voucher, $shipSeller, $otherCost, $otherIncome, $verified, $note, $items) {
+            DB::transaction(function () use ($ex, $org, $no, $storeId, $storeMarketplace, $status, $ful, $o, $revenue, $adminFee, $cogs, $dropship, $dropshipModal, $voucher, $shipSeller, $otherCost, $otherIncome, $verified, $note, $items) {
                 $data = [
                     'status' => $status, 'fulfillment' => $ful, 'order_date' => mp_parse_date($o['orderDate'] ?? null),
                     'buyer_name' => ($o['buyerName'] ?? '') ?: null, 'product_revenue' => $revenue,
                     'shipping_charged_to_buyer' => $o['shippingChargedToBuyer'] ?? 0, 'other_income' => $otherIncome,
                     'cogs' => $cogs, 'admin_fee' => $adminFee, 'shipping_cost_seller' => $shipSeller,
-                    'voucher_seller_borne' => $voucher, 'dropship_cost' => $dropship, 'other_cost' => $otherCost,
+                    'voucher_seller_borne' => $voucher, 'dropship_cost' => $dropship, 'dropship_modal' => $dropshipModal, 'other_cost' => $otherCost,
                     'income_verified' => $verified, 'note' => $note, 'updated_at' => now(),
                 ];
                 if ($ex) {

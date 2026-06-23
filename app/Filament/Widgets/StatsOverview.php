@@ -17,12 +17,12 @@ class StatsOverview extends StatsOverviewWidget
         $ops = Order::query()->whereNotIn('status', ['CANCELLED', 'RETURNED']);
 
         $omzet = (clone $ops)->sum(DB::raw('product_revenue + other_income'));
-        $laba = (clone $ops)->sum(DB::raw(ProfitService::SQL_PROFIT));
+        $laba = (clone $ops)->sum(DB::raw(ProfitService::sqlProfit()));
         $jumlah = (clone $ops)->count();
         $aov = $jumlah > 0 ? $omzet / $jumlah : 0;
         $margin = $omzet > 0 ? ($laba / $omzet * 100) : 0;
         $returBatal = Order::query()->whereIn('status', ['CANCELLED', 'RETURNED'])->count();
-        $pesananRugi = Order::query()->where('status', 'COMPLETED')->whereRaw(ProfitService::SQL_PROFIT . ' < 0')->count();
+        $pesananRugi = Order::query()->where('status', 'COMPLETED')->whereRaw(ProfitService::sqlProfit() . ' < 0')->count();
 
         // Sparkline 6 bulan terakhir
         $months = $this->monthly(6);
@@ -68,7 +68,7 @@ class StatsOverview extends StatsOverviewWidget
             ->whereNotIn('status', ['CANCELLED', 'RETURNED'])
             ->selectRaw("DATE_FORMAT(order_date, '%Y-%m') ym")
             ->selectRaw('SUM(product_revenue + other_income) omzet')
-            ->selectRaw('SUM(' . ProfitService::SQL_PROFIT . ') laba')
+            ->selectRaw('SUM(' . ProfitService::sqlProfit() . ') laba')
             ->groupBy('ym')->orderBy('ym')
             ->get()->keyBy('ym');
 

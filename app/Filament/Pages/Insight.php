@@ -28,7 +28,7 @@ class Insight extends Page
 
     public function getViewData(): array
     {
-        $profit = ProfitService::SQL_PROFIT;
+        $profit = ProfitService::sqlProfit();
 
         $pesananRugi = Order::query()
             ->where('status', 'COMPLETED')
