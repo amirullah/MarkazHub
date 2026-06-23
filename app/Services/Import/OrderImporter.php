@@ -25,29 +25,31 @@ class OrderImporter
         return $marketplace === 'SHOPEE' ? 'SHOPEE' : 'TIKTOKTOKO';
     }
 
-    /** Proses banyak file untuk satu toko. Mengembalikan laporan per-file + ringkasan. */
-    public function importFiles(array $files, int $storeId, string $storeMarketplace, bool $updateOldHpp = false, ?string $hppSince = null): array
+    /** Impor laporan penjualan marketplace (pesanan/penghasilan/dropship) untuk satu toko.
+     *  Katalog/daftar produk diimpor terpisah lewat importCatalogFile() (pilih supplier). */
+    public function importFiles(array $files, int $storeId, string $storeMarketplace): array
     {
         $srcLabel = [
             'shopee_income' => 'Laporan Penghasilan Shopee', 'shopee_order' => 'Order Completed Shopee',
             'tiktok_income' => 'Laporan Penghasilan Tokopedia/TikTok', 'csv' => 'Pesanan Selesai Tokopedia/TikTok',
             'catalog' => 'Master Produk / Katalog', 'dropship_report' => 'Laporan Dropship', 'generic_xlsx' => 'File pesanan',
         ];
-        $report = []; $orderSources = []; $orderFiles = []; $catalog = []; $dropshipMap = []; $hasDropshipReport = false;
+        $report = []; $orderSources = []; $orderFiles = []; $dropshipMap = []; $hasDropshipReport = false;
 
         foreach ($files as $f) {
             $name = $f['name']; $res = mp_read_file($f['path'], $name);
             $label = $srcLabel[$res['source'] ?? ''] ?? 'File';
-            // Org non-Dropship: lewati hanya LAPORAN PESANAN (dropship). Master produk
-            // tetap diproses karena = katalog harga/HPP + riwayat harga (relevan walau dropship off).
-            if (! $this->usesDropship && ($res['type'] ?? '') === 'dropship_report') {
-                $report[] = ['name' => $name, 'ok' => false, 'reason' => 'Laporan dropship dilewati — organisasi tidak berjualan dropship (atur di menu Pengaturan). Master produk/katalog tetap diproses.'];
+            // File DAFTAR PRODUK (katalog) → diimpor lewat tombol "Impor Daftar Produk" (bisa pilih supplier).
+            if (($res['type'] ?? '') === 'catalog') {
+                $report[] = ['name' => $name, 'ok' => false, 'reason' => 'Ini file DAFTAR PRODUK (katalog), bukan laporan penjualan. Pakai tombol "Impor Daftar Produk" agar bisa memilih supplier (stok sendiri / dropship).'];
                 continue;
             }
-            if ($res['type'] === 'catalog') {
-                foreach ($res['products'] as $p) $catalog[$p['sku']] = $p;
-                $report[] = ['name' => $name, 'ok' => true, 'type' => $label, 'detail' => count($res['products']) . ' produk'];
-            } elseif ($res['type'] === 'dropship_report') {
+            // Tidak berjualan dropship → laporan dropship dilewati.
+            if (! $this->usesDropship && ($res['type'] ?? '') === 'dropship_report') {
+                $report[] = ['name' => $name, 'ok' => false, 'reason' => 'Laporan dropship dilewati — Anda tidak berjualan dropship (atur di menu Pengaturan).'];
+                continue;
+            }
+            if ($res['type'] === 'dropship_report') {
                 $hasDropshipReport = true;
                 foreach ($res['dropship'] as $no => $info) $dropshipMap[$no] = $info;
                 $report[] = ['name' => $name, 'ok' => true, 'type' => $label, 'detail' => count($res['dropship']) . ' pesanan dropship'];
@@ -74,17 +76,10 @@ class OrderImporter
         $orderSources = $matched;
 
         $summary = [];
-        if ($catalog) {
-            [$ins, $upd, $changes, $skippedOld] = $this->importCatalog(array_values($catalog));
-            $bf = $this->backfillHpp();
-            if ($updateOldHpp) $bf += $this->recomputeHpp($hppSince);
-            $summary['catalog'] = "Master: $ins baru, $upd diperbarui" . ($changes ? ', ' . count($changes) . ' harga berubah' : '')
-                . ($skippedOld ? ", $skippedOld dilewati (data lebih lama)" : '') . ($bf ? ", $bf pesanan ber-HPP" : '') . '.';
-            $summary['hpp_changes'] = $changes;
-        }
         if ($orderSources) {
             $orders = mp_merge_orders($orderSources);
             $summary['orders'] = $this->importOrders($orders, $storeId, $storeMarketplace, $dropshipMap, $hasDropshipReport, 'SELF');
+            $this->backfillHpp(); // isi HPP yang masih kosong untuk pesanan packing-sendiri dari katalog
         }
         if ($hasDropshipReport) {
             $bf = $this->backfillDropship($dropshipMap);
@@ -166,11 +161,19 @@ class OrderImporter
      * Impor file KATALOG GENERIK (CSV/XLSX) dari sumber apa pun + supplier pilihan.
      * Cari-atau-buat supplier berdasarkan nama (org-scoped). Mengembalikan ringkasan.
      */
-    public function importCatalogFile(string $path, string $name, string $supplierName, bool $isDropship): array
+    public function importCatalogFile(string $path, string $name, string $supplierName, bool $isDropship, bool $updateOldHpp = false): array
     {
         $products = mp_generic_catalog($path, $name);
         if (! $products) {
-            return ['ok' => false, 'reason' => 'Tidak ada produk terbaca. Pastikan file punya kolom SKU dan HPP/Harga.'];
+            // Deteksi salah-rute: file pesanan/laporan masuk ke impor katalog.
+            $t = mp_read_file($path, $name)['type'] ?? '';
+            if ($t === 'orders') {
+                return ['ok' => false, 'reason' => 'File ini berisi data PESANAN, bukan daftar produk. Gunakan tombol "Impor Pesanan & Laporan" untuk file pesanan/laporan.'];
+            }
+            if ($t === 'dropship_report') {
+                return ['ok' => false, 'reason' => 'File ini Laporan Dropship (per pesanan), bukan daftar produk. Gunakan tombol "Impor Pesanan & Laporan".'];
+            }
+            return ['ok' => false, 'reason' => 'Tidak ada produk terbaca. Pastikan file punya kolom Kode Produk (SKU) dan Harga Modal.'];
         }
         $supName = trim($supplierName) !== '' ? trim($supplierName) : ($isDropship ? 'Dropship' : 'Stok Sendiri');
         $supId = DB::table('suppliers')->where('organization_id', $this->orgId)->where('name', $supName)->value('id');
@@ -181,8 +184,10 @@ class OrderImporter
             ]);
         }
         [$ins, $upd, $changes, $skippedOld] = $this->importCatalog($products, (int) $supId, $isDropship);
+        $hppOrders = $this->backfillHpp();
+        if ($updateOldHpp) $hppOrders += $this->recomputeHpp(null);
         return ['ok' => true, 'read' => count($products), 'ins' => $ins, 'upd' => $upd,
-            'changes' => count($changes), 'skipped' => $skippedOld, 'supplier' => $supName];
+            'changes' => count($changes), 'skipped' => $skippedOld, 'hpp_orders' => $hppOrders, 'supplier' => $supName];
     }
 
     /**

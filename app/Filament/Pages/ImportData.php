@@ -6,7 +6,6 @@ use App\Models\Store;
 use App\Services\Import\OrderImporter;
 use BackedEnum;
 use Filament\Actions\Action;
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -36,10 +35,12 @@ class ImportData extends Page
     {
         return [
             Action::make('import')
-                ->label('Unggah & Import')
+                ->label('Impor Pesanan & Laporan')
                 ->icon(Heroicon::OutlinedArrowUpTray)
-                ->modalHeading('Import file ekspor')
-                ->modalSubmitActionLabel('Import sekarang')
+                ->color('primary')
+                ->modalHeading('Impor pesanan & laporan dari marketplace')
+                ->modalDescription('Untuk file yang Anda DOWNLOAD dari Shopee / Tokopedia / TikTok: laporan pesanan, laporan penghasilan, atau laporan dropship. BUKAN untuk daftar produk Anda — itu pakai tombol "Impor Daftar Produk".')
+                ->modalSubmitActionLabel('Impor sekarang')
                 ->schema([
                     Select::make('store_id')
                         ->label('Toko tujuan')
@@ -56,10 +57,10 @@ class ImportData extends Page
                         ->native(false)
                         ->helperText('Pilih toko sesuai channel file (nama toko + channel ditampilkan). File beda channel otomatis dilewati.'),
                     FileUpload::make('files')
-                        ->label('File ekspor (.xlsx / .csv) — boleh beberapa sekaligus')
+                        ->label('File laporan dari marketplace (.xlsx / .csv) — boleh beberapa sekaligus')
                         ->multiple()
                         ->storeFiles(false)
-                        ->helperText('Pilih file ekspor Shopee / Tokopedia / TikTok (Excel .xlsx/.xls atau CSV). File beda channel otomatis dilewati saat proses.')
+                        ->helperText('File hasil download dari Shopee / Tokopedia / TikTok (Excel atau CSV). File yang tidak cocok dengan toko otomatis dilewati — tidak menggagalkan yang lain.')
                         // Validasi berdasarkan EKSTENSI (pasti) — bukan MIME browser yang rapuh
                         // (Windows sering melaporkan .xlsx sebagai application/x-zip-compressed).
                         // Validasi ekstensi. Dibungkus outer closure (fn () => ...) karena
@@ -80,27 +81,22 @@ class ImportData extends Page
                             },
                         ])
                         ->required(),
-                    Toggle::make('update_old_hpp')
-                        ->label('Perbarui HPP pesanan lama dengan harga baru (saat unggah Master)')
-                        ->helperText('Default: pesanan lama tetap pakai HPP saat itu (histori harga terjaga).'),
-                    DatePicker::make('hpp_since')
-                        ->label('Jika di atas dicentang: hanya pesanan sejak tanggal (opsional)')
-                        ->native(false),
                 ])
                 ->action(fn (array $data) => $this->runImport($data)),
 
             Action::make('catalog')
-                ->label('Impor Katalog Produk')
+                ->label('Impor Daftar Produk')
                 ->icon(Heroicon::OutlinedRectangleStack)
                 ->color('gray')
-                ->modalHeading('Impor katalog produk (CSV / Excel)')
-                ->modalDescription('Untuk katalog produk Anda SENDIRI / dari supplier lain (bukan dari laporan marketplace). File minimal punya kolom SKU & HPP (atau Harga). Opsional: Nama, Modal Dropship, Tanggal.')
-                ->modalSubmitActionLabel('Impor katalog')
+                ->modalHeading('Impor daftar produk (katalog Anda)')
+                ->modalDescription('Untuk DAFTAR PRODUK Anda sendiri / dari supplier (BUKAN file dari marketplace). File cukup berisi: Kode Produk (SKU) & Harga Modal. Boleh ditambah: Nama Produk, Tanggal.')
+                ->modalSubmitActionLabel('Impor daftar produk')
                 ->schema([
                     FileUpload::make('file')
-                        ->label('File katalog (.csv / .xlsx)')
+                        ->label('File daftar produk (Excel .xlsx atau CSV)')
                         ->storeFiles(false)
                         ->required()
+                        ->helperText('Kolom wajib: Kode Produk (SKU), Harga Modal. Opsional: Nama Produk, Modal Dropship, Tanggal.')
                         ->rules([
                             fn (): \Closure => function (string $attribute, $value, \Closure $fail): void {
                                 $f = is_array($value) ? ($value[0] ?? null) : $value;
@@ -111,13 +107,16 @@ class ImportData extends Page
                             },
                         ]),
                     TextInput::make('supplier_name')
-                        ->label('Nama supplier')
+                        ->label('Produk ini dari mana? (nama supplier)')
                         ->default('Stok Sendiri')
                         ->required()
-                        ->helperText('Mis. "Stok Sendiri", "Supplier A". Dibuat otomatis jika belum ada.'),
+                        ->helperText('Mis. "Stok Sendiri", "Supplier A", "Toko Grosir B". Dibuat otomatis jika belum ada.'),
                     Toggle::make('is_dropship')
-                        ->label('Produk ini dropship (modal = harga beli ke supplier)')
-                        ->helperText('Aktif: modal di file dihitung sebagai biaya dropship. Nonaktif: stok sendiri (HPP/modal).'),
+                        ->label('Produk ini DROPSHIP (dikirim supplier, bukan stok Anda)')
+                        ->helperText('Aktif: harga di file = biaya yang Anda bayar ke supplier. Nonaktif: stok sendiri, harga di file = modal beli Anda (HPP).'),
+                    Toggle::make('update_old_hpp')
+                        ->label('Perbarui juga harga modal pesanan lama dengan harga baru ini')
+                        ->helperText('Default: pesanan lama tetap memakai harga modal saat itu (riwayat terjaga). Aktifkan hanya bila ingin menimpa.'),
                 ])
                 ->action(fn (array $data) => $this->runCatalogImport($data)),
         ];
@@ -136,18 +135,19 @@ class ImportData extends Page
             $file->getClientOriginalName(),
             (string) ($data['supplier_name'] ?? ''),
             (bool) ($data['is_dropship'] ?? false),
+            (bool) ($data['update_old_hpp'] ?? false),
         );
 
         if (! ($res['ok'] ?? false)) {
-            Notification::make()->title('Impor katalog gagal')->body($res['reason'] ?? '')->danger()->send();
+            Notification::make()->title('Impor daftar produk gagal')->body($res['reason'] ?? '')->danger()->send();
             return;
         }
 
         Notification::make()
-            ->title("Katalog diimpor: {$res['ins']} produk baru, {$res['upd']} diperbarui")
+            ->title("Daftar produk diimpor: {$res['ins']} produk baru, {$res['upd']} diperbarui")
             ->body("Supplier: {$res['supplier']}"
                 . ($res['changes'] ? " · {$res['changes']} harga berubah" : '')
-                . ($res['skipped'] ? " · {$res['skipped']} dilewati (data lebih lama)" : ''))
+                . ($res['skipped'] ? " · {$res['skipped']} dilewati karena tanggal di file lebih lama (harga baru tidak ditimpa)" : ''))
             ->success()
             ->send();
     }
@@ -168,23 +168,18 @@ class ImportData extends Page
         }
 
         $importer = new OrderImporter((int) $store->organization_id);
-        $result = $importer->importFiles(
-            $files,
-            (int) $store->id,
-            $store->marketplace,
-            (bool) ($data['update_old_hpp'] ?? false),
-            $data['hpp_since'] ?? null,
-        );
+        $result = $importer->importFiles($files, (int) $store->id, $store->marketplace);
 
         $this->report = $result['report'];
         $this->summary = $result['summary'];
 
         $ok = collect($this->report)->where('ok', true)->count();
         $fail = collect($this->report)->where('ok', false)->count();
-        $body = implode(' ', array_filter([$result['summary']['catalog'] ?? null, $result['summary']['orders'] ?? null, $result['summary']['dropship'] ?? null]));
+        $body = implode(' ', array_filter([$result['summary']['orders'] ?? null, $result['summary']['dropship'] ?? null]));
+        $body = $body !== '' ? $body : 'Cek detail per file di halaman Import.';
 
         $notif = Notification::make()
-            ->title("Import selesai: {$ok} berhasil, {$fail} gagal")
+            ->title($fail ? "Selesai: {$ok} file diproses, {$fail} dilewati" : "Berhasil: {$ok} file diproses")
             ->body($body)
             ->icon('heroicon-o-arrow-down-tray')
             ->{$fail ? 'warning' : 'success'}();
