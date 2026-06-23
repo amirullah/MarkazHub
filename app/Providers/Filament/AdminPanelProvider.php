@@ -29,6 +29,9 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            // SPA: pindah menu via AJAX (tanpa reload halaman penuh / unduh ulang aset) —
+            // klik menu terasa instan, bukan loading beberapa detik tiap klik.
+            ->spa()
             ->login()
             ->brandName('MarkazHub')
             ->font('Inter')
