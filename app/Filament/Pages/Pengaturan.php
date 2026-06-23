@@ -95,7 +95,7 @@ class Pengaturan extends Page
                 ])
                 ->action(function (array $data): void {
                     $org = Organization::find(auth()->user()->organization_id);
-                    $org->uses_dropship = (bool) ($data['uses_dropship'] ?? false);
+                    $org->uses_dropship = (bool) ($data['uses_dropship'] ?? true);
                     $org->fee_shopee_service_pct = (float) ($data['fee_shopee_service_pct'] ?? 10);
                     $org->fee_shopee_service_cap = (int) ($data['fee_shopee_service_cap'] ?? 10000);
                     $org->fee_tokotiktok_dynamic_pct = (float) ($data['fee_tokotiktok_dynamic_pct'] ?? 6.5);

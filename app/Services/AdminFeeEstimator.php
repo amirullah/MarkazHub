@@ -77,6 +77,11 @@ class AdminFeeEstimator
     /** Setelan biaya tambahan + tarif default per-organisasi (default aman bila kolom/baris belum ada). */
     public function feesForOrg(int $orgId): array
     {
+        // Jaminan kategori ada (sama spt OrderImporter) — mis. org di-restore tanpa kategori.
+        if (! Category::withoutGlobalScopes()->where('organization_id', $orgId)->exists()) {
+            app(DefaultCategories::class)->seedForOrg($orgId);
+        }
+
         $org = Organization::find($orgId);
         $avgShopee = (float) Category::withoutGlobalScopes()->where('organization_id', $orgId)->avg('fee_shopee');
         $avgToko = (float) Category::withoutGlobalScopes()->where('organization_id', $orgId)->avg('fee_tokotiktok');

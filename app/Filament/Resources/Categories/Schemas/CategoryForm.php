@@ -25,12 +25,12 @@ class CategoryForm
                     ->columnSpanFull(),
                 TextInput::make('fee_shopee')
                     ->label('% Biaya Admin Shopee')
-                    ->helperText('Persentase biaya admin Shopee untuk kategori ini (lihat dokumentasi resmi Shopee).')
-                    ->required()->numeric()->minValue(0)->maxValue(100)->default(0)->suffix('%'),
+                    ->helperText('Persentase biaya admin Shopee untuk kategori ini. Disarankan isi >0; bila 0, sistem memakai tarif default 8%.')
+                    ->required()->numeric()->minValue(0)->maxValue(100)->default(8)->suffix('%'),
                 TextInput::make('fee_tokotiktok')
                     ->label('% Biaya Admin Tokopedia/TikTok')
-                    ->helperText('Persentase biaya admin Tokopedia/TikTok (komisinya sama untuk kedua platform).')
-                    ->required()->numeric()->minValue(0)->maxValue(100)->default(0)->suffix('%'),
+                    ->helperText('Persentase biaya admin Tokopedia/TikTok (komisinya sama untuk kedua platform). Bila 0, dipakai default 8%.')
+                    ->required()->numeric()->minValue(0)->maxValue(100)->default(8)->suffix('%'),
             ]);
     }
 }

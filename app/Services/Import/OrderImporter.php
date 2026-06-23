@@ -154,6 +154,11 @@ class OrderImporter
         foreach (array_chunk($priceRows, 500) as $c) {
             DB::table('product_price_changes')->insert($c);
         }
+        // Upsert via DB mentah melewati hook Product::saving (auto-kategori). Bila ada produk baru,
+        // jalankan penggolong agar produk hasil impor katalog tetap dapat kategori (utk estimasi).
+        if ($ins > 0) {
+            app(\App\Services\CategoryClassifier::class)->applyToOrg($this->orgId);
+        }
         return [$ins, $upd, $changes, $skippedOld];
     }
 

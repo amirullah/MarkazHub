@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToOrganization;
+use App\Services\AdminFeeEstimator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -26,11 +27,14 @@ class Category extends Model
         return $this->hasMany(Product::class);
     }
 
-    /** Tarif % biaya admin untuk channel pesanan (SHOPEE vs TOKOPEDIA/TIKTOK). */
+    /** Tarif % biaya admin untuk channel pesanan (SHOPEE vs TIKTOKTOKO; Tokopedia+TikTok digabung jadi TIKTOKTOKO). */
     public function feeForMarketplace(string $marketplace): float
     {
-        return $marketplace === 'SHOPEE'
+        $fee = $marketplace === 'SHOPEE'
             ? (float) $this->fee_shopee
             : (float) $this->fee_tokotiktok;
+
+        // Bila tarif kategori belum diisi (0), pakai default agar estimasi tidak jadi 0.
+        return $fee > 0 ? $fee : AdminFeeEstimator::DEFAULT_COMMISSION_PCT;
     }
 }

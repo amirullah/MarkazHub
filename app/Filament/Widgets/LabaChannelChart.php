@@ -19,18 +19,20 @@ class LabaChannelChart extends ChartWidget
 
     protected function getData(): array
     {
+        // Lebur legacy TOKOPEDIA/TIKTOK ke TIKTOKTOKO (konsisten dgn ChannelChart & filter sistem).
         $rows = Order::query()
             ->whereNotIn('status', ['CANCELLED', 'RETURNED'])
-            ->selectRaw('marketplace, SUM(' . ProfitService::sqlProfit() . ') laba')
-            ->groupBy('marketplace')
-            ->pluck('laba', 'marketplace');
+            ->selectRaw("CASE WHEN marketplace IN ('TOKOPEDIA', 'TIKTOK') THEN 'TIKTOKTOKO' ELSE marketplace END AS ch, SUM(" . ProfitService::sqlProfit() . ') laba')
+            ->groupBy('ch')
+            ->pluck('laba', 'ch');
 
-        $map = ['SHOPEE' => 'Shopee', 'TIKTOKTOKO' => 'Tokopedia/TikTok'];
+        $labelMap = ['SHOPEE' => 'Shopee', 'TIKTOKTOKO' => 'Tokopedia/TikTok'];
+        $colorMap = ['SHOPEE' => '#f97316', 'TIKTOKTOKO' => '#22c55e'];
         $labels = []; $data = []; $colors = [];
-        foreach ($map as $key => $label) {
+        foreach ($labelMap as $key => $label) {
             $labels[] = $label;
             $data[] = round((float) ($rows[$key] ?? 0));
-            $colors[] = $key === 'SHOPEE' ? '#f97316' : '#22c55e';
+            $colors[] = $colorMap[$key];
         }
 
         return [

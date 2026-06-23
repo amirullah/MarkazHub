@@ -19,11 +19,13 @@ class ChannelChart extends ChartWidget
 
     protected function getData(): array
     {
+        // Tokopedia/TikTok dianggap satu channel: nilai legacy TOKOPEDIA/TIKTOK dilebur ke TIKTOKTOKO
+        // (konsisten dgn filter & merge sistem) agar tidak ada omzet yang hilang dari grafik.
         $rows = Order::query()
             ->whereNotIn('status', ['CANCELLED', 'RETURNED'])
-            ->selectRaw('marketplace, SUM(product_revenue + other_income) omzet')
-            ->groupBy('marketplace')
-            ->pluck('omzet', 'marketplace');
+            ->selectRaw("CASE WHEN marketplace IN ('TOKOPEDIA', 'TIKTOK') THEN 'TIKTOKTOKO' ELSE marketplace END AS ch, SUM(product_revenue + other_income) omzet")
+            ->groupBy('ch')
+            ->pluck('omzet', 'ch');
 
         $labelMap = ['SHOPEE' => 'Shopee', 'TIKTOKTOKO' => 'Tokopedia/TikTok'];
         $colorMap = ['SHOPEE' => '#f97316', 'TIKTOKTOKO' => '#22c55e'];
