@@ -25,16 +25,16 @@ class OrderInfolist
                     TextEntry::make('order_date')->label('Tanggal')->dateTime('d M Y H:i'),
                     TextEntry::make('store.name')->label('Toko'),
                     TextEntry::make('marketplace')->label('Channel')->badge()
-                        ->formatStateUsing(fn ($s) => OrderForm::CHANNEL[$s] ?? $s)
-                        ->color(fn ($s) => $s === 'SHOPEE' ? 'warning' : 'success'),
+                        ->formatStateUsing(fn ($state) => OrderForm::CHANNEL[$state] ?? $state)
+                        ->color(fn ($state) => $state === 'SHOPEE' ? 'warning' : 'success'),
                     TextEntry::make('status')->label('Status')->badge()
-                        ->formatStateUsing(fn ($s) => OrderForm::STATUS[$s] ?? $s),
+                        ->formatStateUsing(fn ($state) => OrderForm::STATUS[$state] ?? $state),
                     TextEntry::make('fulfillment')->label('Pemenuhan')->badge()->color('gray')
-                        ->formatStateUsing(fn ($s) => OrderForm::FULFILLMENT[$s] ?? $s),
+                        ->formatStateUsing(fn ($state) => OrderForm::FULFILLMENT[$state] ?? $state),
                     TextEntry::make('buyer_name')->label('Pembeli')->placeholder('—'),
                     TextEntry::make('income_verified')->label('Laba')->badge()
-                        ->formatStateUsing(fn ($s) => $s ? 'Final' : 'Estimasi')
-                        ->color(fn ($s) => $s ? 'success' : 'gray'),
+                        ->formatStateUsing(fn ($state) => $state ? 'Final' : 'Estimasi')
+                        ->color(fn ($state) => $state ? 'success' : 'gray'),
                 ]),
 
             Section::make('Pendapatan')
