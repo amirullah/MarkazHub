@@ -93,25 +93,35 @@ class OrdersTable
                     ->state(function (\App\Models\Order $record): string {
                         $gaps = $record->incompleteness();
                         if (empty($gaps)) {
-                            return 'Final';
+                            // Laba final. "Final*" bila rincian item belum ada (laba tetap pasti).
+                            return $record->lacksItemDetail() ? 'Final*' : 'Final';
                         }
                         $dataGaps = array_filter($gaps, fn (string $g): bool => ! str_contains($g, 'ESTIMASI'));
 
                         return $dataGaps ? 'Perlu data' : 'Estimasi';
                     })
                     ->color(fn (string $state): string => match ($state) {
-                        'Final' => 'success',
+                        'Final', 'Final*' => 'success',
                         'Perlu data' => 'warning',
                         default => 'gray',
                     })
                     ->icon(fn (string $state): string => match ($state) {
                         'Final' => 'heroicon-m-check-circle',
+                        'Final*' => 'heroicon-m-information-circle',
                         'Perlu data' => 'heroicon-m-exclamation-triangle',
                         default => 'heroicon-m-clock',
                     })
-                    ->tooltip(fn (\App\Models\Order $record): string => ($g = $record->incompleteness())
-                        ? 'Belum: ' . implode(' · ', $g)
-                        : 'Laba final & akurat (biaya asli + modal lengkap).'),
+                    ->tooltip(function (\App\Models\Order $record): string {
+                        $g = $record->incompleteness();
+                        if ($g) {
+                            return 'Belum: ' . implode(' · ', $g);
+                        }
+                        if ($record->lacksItemDetail()) {
+                            return 'Laba sudah final & akurat, TAPI rincian item produk belum tercatat (tak memengaruhi laba). Impor File/Laporan Pesanan untuk detail produk.';
+                        }
+
+                        return 'Laba final & akurat — biaya asli, modal, & rincian item lengkap.';
+                    }),
             ])
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('items:id,order_id,product_id'))
             ->filters([
