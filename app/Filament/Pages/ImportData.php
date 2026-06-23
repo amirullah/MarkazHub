@@ -126,13 +126,14 @@ class ImportData extends Page
             ->color('primary')
             ->extraAttributes(['class' => 'justify-center', 'style' => 'min-width:16rem'])
             ->modalHeading('Impor biaya dropship (per pesanan)')
+            ->modalDescription('Biaya Dropship = TOTAL yang Anda bayar ke supplier untuk pesanan itu (sudah termasuk harga produk + ongkir/biaya) — bukan hanya selisih/biayanya. Kolom Modal Produk (harga produk saja) opsional.')
             ->modalSubmitActionLabel('Impor dropship')
             ->schema([
                 FileUpload::make('file')
                     ->label('File dropship (Excel .xlsx atau CSV)')
                     ->storeFiles(false)
                     ->required()
-                    ->helperText('Boleh: laporan dari penyedia dropship, ATAU file isian dari "Unduh Format" (No. Pesanan + Biaya Dropship).')
+                    ->helperText('Boleh: laporan dari penyedia dropship, ATAU file isian dari "Unduh Format File" (No. Pesanan + Biaya Dropship).')
                     ->rules($this->extRule()),
             ])
             ->action(fn (array $data) => $this->runDropshipImport($data));
@@ -148,7 +149,7 @@ class ImportData extends Page
             ->link()
             ->action(fn () => $this->xlsxTemplate(
                 'format-biaya-dropship.xlsx',
-                ['No. Pesanan', 'Biaya Dropship', 'Modal Produk'],
+                ['No. Pesanan', 'Biaya Dropship (total bayar ke supplier)', 'Modal Produk (harga produk saja, opsional)'],
                 [['CONTOH-HAPUS-BARIS-INI', 50000, 45000]],
                 [1], // No. Pesanan dipaksa TEKS (angka panjang tak rusak di Excel)
             ));
@@ -226,13 +227,7 @@ class ImportData extends Page
         };
         $type = $ok > 0 ? ($fail ? 'warning' : 'success') : 'danger';
 
-        $notif = Notification::make()
-            ->title($title)
-            ->body(new HtmlString(implode('<br>', array_map('e', $lines))))
-            ->icon('heroicon-o-arrow-down-tray')
-            ->{$type}();
-        $notif->send();
-        $notif->sendToDatabase(auth()->user());
+        $this->notify($title, $lines, $type);
     }
 
     protected function runCatalogImport(array $data): void
@@ -252,11 +247,7 @@ class ImportData extends Page
         );
 
         if (! ($res['ok'] ?? false)) {
-            Notification::make()
-                ->title('Impor daftar produk gagal')
-                ->body(new HtmlString('Penyebab: ' . e($res['reason'] ?? 'Format file tidak dikenali.')))
-                ->danger()
-                ->send();
+            $this->notify('Impor daftar produk gagal', ['Penyebab: ' . ($res['reason'] ?? 'Format file tidak dikenali.')], 'danger');
             return;
         }
 
@@ -271,11 +262,7 @@ class ImportData extends Page
             $lines[] = 'Catatan: tidak ada produk yang masuk. Pastikan file punya kolom Kode Produk (SKU) & Harga Modal.';
         }
 
-        Notification::make()
-            ->title('Daftar produk berhasil diimpor')
-            ->body(new HtmlString(implode('<br>', array_map('e', $lines))))
-            ->success()
-            ->send();
+        $this->notify('Daftar produk berhasil diimpor', $lines, 'success');
     }
 
     protected function runDropshipImport(array $data): void
@@ -290,11 +277,7 @@ class ImportData extends Page
             ->importDropshipFile($file->getRealPath(), $file->getClientOriginalName());
 
         if (! ($res['ok'] ?? false)) {
-            Notification::make()
-                ->title('Impor dropship gagal')
-                ->body(new HtmlString('Penyebab: ' . e($res['reason'] ?? 'Format file tidak dikenali.')))
-                ->danger()
-                ->send();
+            $this->notify('Impor dropship gagal', ['Penyebab: ' . ($res['reason'] ?? 'Format file tidak dikenali.')], 'danger');
             return;
         }
 
@@ -309,10 +292,19 @@ class ImportData extends Page
             $lines[] = 'Semua pesanan yang cocok sudah sesuai (tidak ada perubahan).';
         }
 
-        Notification::make()
-            ->title('Biaya dropship berhasil diimpor')
+        $this->notify('Biaya dropship berhasil diimpor', $lines, ($res['notfound'] ?? 0) > 0 ? 'warning' : 'success');
+    }
+
+    /** Kirim notifikasi (toast + lonceng) dgn body multi-baris yg jelas. */
+    private function notify(string $title, array $lines, string $type): void
+    {
+        $notif = Notification::make()
+            ->title($title)
             ->body(new HtmlString(implode('<br>', array_map('e', $lines))))
-            ->{($res['notfound'] ?? 0) > 0 ? 'warning' : 'success'}()
-            ->send();
+            ->{$type}();
+        $notif->send();
+        if ($user = auth()->user()) {
+            $notif->sendToDatabase($user);
+        }
     }
 }

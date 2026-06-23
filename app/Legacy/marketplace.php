@@ -396,8 +396,11 @@ function mp_generic_dropship(string $path, string $name): array
         $inv = mp_pick($r, ['no. pesanan', 'no pesanan', 'nomor pesanan', 'kode invoice channel', 'order id', 'order sn', 'invoice', 'kode pesanan']);
         if (!$inv) continue;
         if (stripos($inv, 'HAPUS-BARIS') !== false) continue; // baris contoh dari template Unduh Format
-        $total = mp_num(mp_pick($r, ['biaya dropship', 'total dropship', 'total transaksi', 'total biaya', 'total', 'biaya']));
-        $modal = mp_num(mp_pick($r, ['modal produk', 'total harga produk', 'harga produk', 'modal', 'hpp']));
+        // "Biaya Dropship" = TOTAL bayar ke supplier (harga produk + biaya/ongkir). mp_pick_like agar
+        // header panjang spt "Biaya Dropship (total bayar ke supplier)" tetap cocok.
+        $total = mp_num(mp_pick_like($r, 'biaya dropship') ?? mp_pick($r, ['total dropship', 'total transaksi', 'total biaya', 'total', 'biaya']));
+        // "Modal Produk" = harga produk SAJA (utk hitung "seandainya packing sendiri").
+        $modal = mp_num(mp_pick_like($r, 'modal produk') ?? mp_pick($r, ['total harga produk', 'harga produk', 'modal', 'hpp']));
         if ($total <= 0 && $modal <= 0) continue;
         if ($total <= 0) $total = $modal;           // hanya modal diberikan
         if ($modal <= 0) $modal = $total;           // hanya total → dropship_modal = total (aman, tak ada penghematan palsu)

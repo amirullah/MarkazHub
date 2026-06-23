@@ -63,6 +63,7 @@
                         <ul style="{{ $ul }}">
                             <li><strong>Punya file laporan dari penyedia dropship?</strong> Langsung unggah di sini.</li>
                             <li><strong>Tidak punya laporan?</strong> Klik <em>"Unduh Format File"</em>, isi <strong>No. Pesanan</strong> &amp; <strong>Biaya Dropship</strong>, lalu unggah.</li>
+                            <li><strong>Biaya Dropship = total bayar ke supplier</strong> (harga produk + ongkir/biaya) — <u>bukan hanya biayanya saja</u>.</li>
                         </ul>
                         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;margin-top:.85rem">
                             <div style="{{ $btnWrap }}">{{ $this->dropshipAction }}</div>
