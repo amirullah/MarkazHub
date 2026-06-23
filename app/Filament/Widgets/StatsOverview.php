@@ -14,22 +14,35 @@ class StatsOverview extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $ops = Order::query()->whereNotIn('status', ['CANCELLED', 'RETURNED']);
+        // Angka di-cache per org (TTL pendek, dibatalkan saat impor/estimasi) — hemat query berat.
+        $d = \App\Support\DashboardCache::remember('stats', function (): array {
+            $ops = Order::query()->whereNotIn('status', ['CANCELLED', 'RETURNED']);
+            $months = $this->monthly(6);
 
-        $omzet = (clone $ops)->sum(DB::raw('product_revenue + other_income'));
-        $laba = (clone $ops)->sum(DB::raw(ProfitService::sqlProfit()));
-        $jumlah = (clone $ops)->count();
+            return [
+                'omzet' => (float) (clone $ops)->sum(DB::raw('product_revenue + other_income')),
+                'laba' => (float) (clone $ops)->sum(DB::raw(ProfitService::sqlProfit())),
+                'jumlah' => (clone $ops)->count(),
+                'batal' => Order::query()->where('status', 'CANCELLED')->count(),
+                'retur' => Order::query()->where('status', 'RETURNED')->count(),
+                'belumFinal' => Order::query()->labaBelumFinal()->count(),
+                'pesananRugi' => Order::query()->where('status', 'COMPLETED')->whereRaw(ProfitService::sqlProfit() . ' < 0')->count(),
+                'sparkLaba' => array_values(array_map(fn ($m) => round($m['laba']), $months)),
+                'sparkOmzet' => array_values(array_map(fn ($m) => round($m['omzet']), $months)),
+            ];
+        });
+
+        $omzet = $d['omzet'];
+        $laba = $d['laba'];
+        $jumlah = $d['jumlah'];
+        $batal = $d['batal'];
+        $retur = $d['retur'];
+        $belumFinal = $d['belumFinal'];
+        $pesananRugi = $d['pesananRugi'];
+        $sparkLaba = $d['sparkLaba'];
+        $sparkOmzet = $d['sparkOmzet'];
         $aov = $jumlah > 0 ? $omzet / $jumlah : 0;
         $margin = $omzet > 0 ? ($laba / $omzet * 100) : 0;
-        $batal = Order::query()->where('status', 'CANCELLED')->count();
-        $retur = Order::query()->where('status', 'RETURNED')->count();
-        $belumFinal = Order::query()->labaBelumFinal()->count();
-        $pesananRugi = Order::query()->where('status', 'COMPLETED')->whereRaw(ProfitService::sqlProfit() . ' < 0')->count();
-
-        // Sparkline 6 bulan terakhir
-        $months = $this->monthly(6);
-        $sparkLaba = array_values(array_map(fn ($m) => round($m['laba']), $months));
-        $sparkOmzet = array_values(array_map(fn ($m) => round($m['omzet']), $months));
 
         $rp = fn ($v) => 'Rp ' . number_format((float) $v, 0, ',', '.');
 

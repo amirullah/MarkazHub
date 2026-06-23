@@ -21,6 +21,11 @@ class LabaPerBulanChart extends ChartWidget
 
     protected function getData(): array
     {
+        return \App\Support\DashboardCache::remember('laba_bulan', fn (): array => $this->buildData());
+    }
+
+    private function buildData(): array
+    {
         $rows = Order::query()
             ->whereNotIn('status', ['CANCELLED', 'RETURNED'])
             ->selectRaw("DATE_FORMAT(order_date, '%Y-%m') ym")

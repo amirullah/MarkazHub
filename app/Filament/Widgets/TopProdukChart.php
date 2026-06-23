@@ -18,6 +18,11 @@ class TopProdukChart extends ChartWidget
 
     protected function getData(): array
     {
+        return \App\Support\DashboardCache::remember('top_produk', fn (): array => $this->buildData());
+    }
+
+    private function buildData(): array
+    {
         $rows = OrderItem::query()
             ->whereNotNull('sku')
             ->whereHas('order', fn ($q) => $q->where('status', 'COMPLETED'))

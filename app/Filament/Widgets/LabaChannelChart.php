@@ -19,6 +19,11 @@ class LabaChannelChart extends ChartWidget
 
     protected function getData(): array
     {
+        return \App\Support\DashboardCache::remember('laba_channel', fn (): array => $this->buildData());
+    }
+
+    private function buildData(): array
+    {
         // Lebur legacy TOKOPEDIA/TIKTOK ke TIKTOKTOKO (konsisten dgn ChannelChart & filter sistem).
         $rows = Order::query()
             ->whereNotIn('status', ['CANCELLED', 'RETURNED'])

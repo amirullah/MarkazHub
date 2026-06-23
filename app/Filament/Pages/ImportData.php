@@ -199,6 +199,7 @@ class ImportData extends Page
         $result = (new OrderImporter((int) $store->organization_id))->importFiles($files, (int) $store->id, $store->marketplace);
         $this->report = $result['report'];
         $this->summary = $result['summary'];
+        \App\Support\DashboardCache::forget((int) $store->organization_id); // data berubah → dashboard segar
 
         $ok = collect($this->report)->where('ok', true)->count();
         $fail = collect($this->report)->where('ok', false)->count();
@@ -252,6 +253,7 @@ class ImportData extends Page
             $this->notify('Impor daftar produk gagal', ['Penyebab: ' . ($res['reason'] ?? 'Format file tidak dikenali.')], 'danger');
             return;
         }
+        \App\Support\DashboardCache::forget((int) auth()->user()->organization_id); // HPP berubah → dashboard segar
 
         $lines = ["✅ {$res['ins']} produk baru, {$res['upd']} diperbarui.", "Supplier: {$res['supplier']}."];
         if ($res['changes']) {
@@ -282,6 +284,7 @@ class ImportData extends Page
             $this->notify('Impor dropship gagal', ['Penyebab: ' . ($res['reason'] ?? 'Format file tidak dikenali.')], 'danger');
             return;
         }
+        \App\Support\DashboardCache::forget((int) auth()->user()->organization_id); // biaya dropship berubah → dashboard segar
 
         $lines = [
             "✅ {$res['updated']} pesanan ditandai dropship & biayanya terisi.",

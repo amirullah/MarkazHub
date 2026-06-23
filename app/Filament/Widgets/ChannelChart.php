@@ -19,6 +19,11 @@ class ChannelChart extends ChartWidget
 
     protected function getData(): array
     {
+        return \App\Support\DashboardCache::remember('channel', fn (): array => $this->buildData());
+    }
+
+    private function buildData(): array
+    {
         // Tokopedia/TikTok dianggap satu channel: nilai legacy TOKOPEDIA/TIKTOK dilebur ke TIKTOKTOKO
         // (konsisten dgn filter & merge sistem) agar tidak ada omzet yang hilang dari grafik.
         $rows = Order::query()
