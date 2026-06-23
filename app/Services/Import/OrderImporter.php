@@ -81,7 +81,10 @@ class OrderImporter
         $summary = [];
         if ($orderSources) {
             $orders = mp_merge_orders($orderSources);
-            $summary['orders'] = $this->importOrders($orders, $storeId, $storeMarketplace, [], false, 'SELF');
+            // Pakai biaya dropship yang SUDAH tersimpan (mis. laporan dropship diunggah lebih dulu) →
+            // pesanan langsung ditandai DROPSHIP saat dibuat, tak peduli urutan unggah.
+            $dropshipMap = $this->persistedDropshipMap();
+            $summary['orders'] = $this->importOrders($orders, $storeId, $storeMarketplace, $dropshipMap, ! empty($dropshipMap), 'SELF');
             $this->backfillHpp(); // isi HPP yang masih kosong untuk pesanan packing-sendiri dari katalog
         }
 
@@ -215,9 +218,53 @@ class OrderImporter
         $invoices = array_map('strval', array_keys($map));
         $matched = DB::table('orders')->where('organization_id', $this->orgId)
             ->whereIn('external_no', $invoices)->distinct()->count('external_no');
+
+        // Simpan PERMANEN dulu (agar tetap berlaku walau pesanannya diimpor belakangan)...
+        $this->persistDropship($map);
+        // ...lalu terapkan ke pesanan yang SUDAH ada.
         $updated = $this->backfillDropship($map);
+
         return ['ok' => true, 'rows' => count($map), 'matched' => $matched,
             'updated' => $updated, 'notfound' => max(0, count($map) - $matched)];
+    }
+
+    /** Simpan/segarkan biaya dropship per No. Pesanan ke tabel permanen dropship_costs. */
+    private function persistDropship(array $map): void
+    {
+        $now = now();
+        $rows = [];
+        foreach ($map as $no => $jak) {
+            $rows[] = [
+                'organization_id' => $this->orgId,
+                'external_no' => (string) $no,
+                'total' => (float) ($jak['total'] ?? 0),
+                'product_cost' => (float) ($jak['productCost'] ?? 0),
+                'code' => mb_substr((string) ($jak['dropshipCode'] ?? ''), 0, 64) ?: null,
+                'created_at' => $now, 'updated_at' => $now,
+            ];
+        }
+        foreach (array_chunk($rows, 500) as $c) {
+            DB::table('dropship_costs')->upsert($c, ['organization_id', 'external_no'], ['total', 'product_cost', 'code', 'updated_at']);
+        }
+    }
+
+    /** Peta dropship tersimpan (semua No. Pesanan dropship org) — diterapkan ke pesanan saat impor. */
+    private function persistedDropshipMap(): array
+    {
+        $map = [];
+        if (! \Schema::hasTable('dropship_costs')) {
+            return $map;
+        }
+        foreach (DB::table('dropship_costs')->where('organization_id', $this->orgId)->get() as $r) {
+            $map[(string) $r->external_no] = [
+                'total' => (float) $r->total,
+                'productCost' => (float) $r->product_cost,
+                'dropshipCode' => $r->code,
+                'partnerFee' => 0,
+                'additional' => 0,
+            ];
+        }
+        return $map;
     }
 
     /**
