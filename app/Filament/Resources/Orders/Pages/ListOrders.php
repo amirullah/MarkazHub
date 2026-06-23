@@ -58,9 +58,9 @@ class ListOrders extends ListRecords
                 ->modalHeading('Isi estimasi biaya admin')
                 ->modalDescription(function (): string {
                     $tanpaKategori = \App\Models\Product::whereNull('category_id')->count();
-                    $base = 'Mengisi biaya admin (estimasi dari % kategori produk + biaya proses Rp1.250/pesanan) untuk pesanan yang BELUM punya biaya admin & belum final. Pesanan dengan laba final tidak diubah.';
+                    $base = 'Menghitung ulang estimasi biaya (komisi % kategori + Biaya Layanan/Komisi Dinamis + biaya proses Rp1.250) untuk SEMUA pesanan yang belum final. Pesanan batal otomatis jadi Rp0. Pesanan dengan laba final (laporan penghasilan) tidak diubah.';
                     if ($tanpaKategori > 0) {
-                        return $base . " ⚠️ PERHATIAN: {$tanpaKategori} produk belum punya kategori sehingga estimasinya TIDAK akan terisi. Pasang kategori dulu di menu Produk → tombol \"Auto-pasang Kategori\".";
+                        return $base . " Catatan: {$tanpaKategori} produk belum berkategori — estimasinya tetap terisi memakai tarif rata-rata, tapi pasang kategori (menu Produk → \"Auto-pasang Kategori\") agar lebih akurat.";
                     }
                     return $base . ' ✓ Semua produk sudah berkategori.';
                 })
