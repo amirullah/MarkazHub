@@ -38,9 +38,10 @@ class OrderImporter
         foreach ($files as $f) {
             $name = $f['name']; $res = mp_read_file($f['path'], $name);
             $label = $srcLabel[$res['source'] ?? ''] ?? 'File';
-            // Org non-Jakmall: lewati file Jakmall (tidak menggagalkan file lain).
-            if (! $this->usesJakmall && in_array($res['type'] ?? '', ['jakmall', 'jakmall_orders'], true)) {
-                $report[] = ['name' => $name, 'ok' => false, 'reason' => 'Organisasi ini tidak memakai Jakmall — file dilewati (aktifkan di menu Pengaturan bila perlu).'];
+            // Org non-Jakmall: lewati hanya LAPORAN PESANAN (dropship). Master produk
+            // tetap diproses karena = katalog harga/HPP + riwayat harga (relevan walau dropship off).
+            if (! $this->usesJakmall && ($res['type'] ?? '') === 'jakmall_orders') {
+                $report[] = ['name' => $name, 'ok' => false, 'reason' => 'Laporan Pesanan Jakmall (dropship) dilewati — organisasi tidak memakai dropship Jakmall. (Master produk tetap diproses.)'];
                 continue;
             }
             if ($res['type'] === 'jakmall') {

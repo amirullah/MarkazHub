@@ -24,10 +24,14 @@
                     <div style="font-weight:600;color:#1e293b">📦 File Pesanan</div>
                     <div style="font-size:.8rem;color:#64748b;margin-top:.25rem">Daftar pesanan, produk, qty, &amp; status (selesai/dikirim/retur/batal).</div>
                 </div>
+                <div style="{{ $mini }}">
+                    <div style="font-weight:600;color:#1e293b">🗂️ Master Produk Jakmall</div>
+                    <div style="font-size:.8rem;color:#64748b;margin-top:.25rem">Katalog produk, <strong>harga/HPP</strong> &amp; riwayat perubahan harga.</div>
+                </div>
                 @if (\App\Models\Organization::currentUsesJakmall())
                     <div style="{{ $mini }}">
-                        <div style="font-weight:600;color:#1e293b">🗂️ Master / Laporan Jakmall</div>
-                        <div style="font-size:.8rem;color:#64748b;margin-top:.25rem">Katalog produk &amp; <strong>HPP/modal</strong> (untuk hitung laba).</div>
+                        <div style="font-weight:600;color:#1e293b">📑 Laporan Pesanan Jakmall</div>
+                        <div style="font-size:.8rem;color:#64748b;margin-top:.25rem">Data dropship per pesanan (biaya mitra Jakmall).</div>
                     </div>
                 @endif
             </div>
