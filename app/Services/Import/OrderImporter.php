@@ -2,6 +2,7 @@
 
 namespace App\Services\Import;
 
+use App\Services\DefaultCategories;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -18,6 +19,12 @@ class OrderImporter
     {
         // Org yang tidak memakai Dropship: file master/laporan Dropship dilewati saat import.
         $this->usesDropship = (bool) (DB::table('organizations')->where('id', $orgId)->value('uses_dropship') ?? true);
+
+        // Jaminan: bila org belum punya kategori (mis. dibuat lewat jalur tanpa event),
+        // seed kategori default dulu agar produk yang diimpor tetap bisa tergolong & diestimasi.
+        if (! DB::table('categories')->where('organization_id', $orgId)->exists()) {
+            app(DefaultCategories::class)->seedForOrg($orgId);
+        }
     }
 
     private function group(string $marketplace): string
