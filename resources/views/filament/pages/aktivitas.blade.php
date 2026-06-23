@@ -10,7 +10,7 @@
             'status' => 'Status', 'fulfillment' => 'Pemenuhan', 'product_revenue' => 'Omzet', 'cogs' => 'HPP',
             'admin_fee' => 'Biaya Admin', 'buyer_name' => 'Nama Pembeli',
         ];
-        $usesJakmall = \App\Models\Organization::currentUsesJakmall();
+        $usesDropship = \App\Models\Organization::currentUsesDropship();
     @endphp
 
     <x-filament::section>
@@ -30,7 +30,7 @@
                     @php
                         [$evtLabel, $evtColor] = $evt[$a->event] ?? [$a->event, '#64748b'];
                         $changedKeys = array_keys($a->properties['attributes'] ?? []);
-                        if (! $usesJakmall) {
+                        if (! $usesDropship) {
                             $changedKeys = array_filter($changedKeys, fn ($k) => ! in_array($k, ['dropship_cost', 'fulfillment'], true));
                         }
                         $changed = array_map(fn ($k) => $attrLabels[$k] ?? $k, $changedKeys);

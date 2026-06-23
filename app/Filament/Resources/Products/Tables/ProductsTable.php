@@ -38,7 +38,7 @@ class ProductsTable
                     ->dateTime('d M Y')
                     ->placeholder('—')
                     ->sortable()
-                    ->tooltip('Tanggal harga master terakhir berubah (dari kolom "Perubahan Terakhir" Jakmall). Klik "Riwayat Harga" untuk detail.')
+                    ->tooltip('Tanggal harga terakhir berubah (dari master/katalog yang di-upload). Klik "Riwayat Harga" untuk detail.')
                     ->badge()
                     ->color('warning'),
                 TextColumn::make('dropship_cost')
@@ -47,7 +47,7 @@ class ProductsTable
                     ->sortable()
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: true)
-                    ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
+                    ->visible(fn (): bool => \App\Models\Organization::currentUsesDropship()),
                 TextColumn::make('category.name')
                     ->label('Kategori')
                     ->badge()

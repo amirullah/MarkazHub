@@ -37,7 +37,7 @@ class ProfitService
      */
     public static function dropshipExpr(): string
     {
-        return \App\Models\Organization::currentUsesJakmall()
+        return \App\Models\Organization::currentUsesDropship()
             ? 'dropship_cost'
             : 'COALESCE(NULLIF(dropship_modal, 0), dropship_cost)';
     }
@@ -54,7 +54,7 @@ class ProfitService
     /** Biaya dropship efektif (PHP) sesuai toggle Jakmall, dgn fallback aman. */
     private function effectiveDropship(array|object $o): float
     {
-        if (\App\Models\Organization::currentUsesJakmall()) {
+        if (\App\Models\Organization::currentUsesDropship()) {
             return $this->f($o, 'dropship_cost');
         }
         $modal = $this->f($o, 'dropship_modal');

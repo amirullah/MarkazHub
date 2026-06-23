@@ -39,7 +39,7 @@
                 <span style="font-size:.8rem;color:#94a3b8">Perubahan harga berikutnya akan tampil lengkap di sini (harga lama → baru).</span>
             @else
                 Belum ada perubahan harga tercatat untuk produk ini.<br>
-                <span style="font-size:.8rem;color:#94a3b8">Riwayat terisi otomatis setiap upload master produk Jakmall yang baru.</span>
+                <span style="font-size:.8rem;color:#94a3b8">Riwayat terisi otomatis setiap upload master produk (katalog) yang baru.</span>
             @endif
         </div>
     @endforelse

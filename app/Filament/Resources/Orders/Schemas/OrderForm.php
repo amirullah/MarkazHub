@@ -70,7 +70,7 @@ class OrderForm
                             ->default('SELF')
                             ->required()
                             ->native(false)
-                            ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
+                            ->visible(fn (): bool => \App\Models\Organization::currentUsesDropship()),
                         TextInput::make('buyer_name')
                             ->label('Nama Pembeli')
                             ->maxLength(255),
@@ -111,7 +111,7 @@ class OrderForm
                         TextInput::make('dropship_cost')
                             ->label('Biaya Dropship')
                             ->required()->numeric()->minValue(0)->default(0)->prefix('Rp')
-                            ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
+                            ->visible(fn (): bool => \App\Models\Organization::currentUsesDropship()),
                         TextInput::make('other_cost')
                             ->label('Biaya Lain')
                             ->required()->numeric()->minValue(0)->default(0)->prefix('Rp'),

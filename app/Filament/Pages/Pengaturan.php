@@ -36,16 +36,16 @@ class Pengaturan extends Page
                 ->label('Ubah Pengaturan')
                 ->icon(Heroicon::OutlinedPencilSquare)
                 ->fillForm(fn (): array => [
-                    'uses_jakmall' => (bool) (Organization::find(auth()->user()->organization_id)?->uses_jakmall ?? true),
+                    'uses_dropship' => (bool) (Organization::find(auth()->user()->organization_id)?->uses_dropship ?? true),
                 ])
                 ->schema([
-                    Toggle::make('uses_jakmall')
-                        ->label('Saya menggunakan Jakmall (dropship)')
-                        ->helperText('Aktif: fitur dropship Jakmall tampil (import master/laporan Jakmall, kolom & biaya dropship). Nonaktif: semua tampilan dropship disembunyikan dan file Jakmall dilewati saat import.'),
+                    Toggle::make('uses_dropship')
+                        ->label('Saya berjualan dropship')
+                        ->helperText('Aktif jika sebagian/semua pesanan Anda dropship (dari sumber mana pun — Jakmall, supplier/perusahaan lain, atau manual dari seller lain). Aktif: kolom & biaya dropship + pemenuhan tampil. Nonaktif: tampilan dropship disembunyikan dan laba dihitung sebagai packing sendiri.'),
                 ])
                 ->action(function (array $data): void {
                     $org = Organization::find(auth()->user()->organization_id);
-                    $org->uses_jakmall = (bool) ($data['uses_jakmall'] ?? false);
+                    $org->uses_dropship = (bool) ($data['uses_dropship'] ?? false);
                     $org->save();
 
                     Notification::make()

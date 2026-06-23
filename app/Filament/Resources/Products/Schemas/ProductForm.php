@@ -45,7 +45,7 @@ class ProductForm
                     ->minValue(0)
                     ->default(0)
                     ->prefix('Rp')
-                    ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
+                    ->visible(fn (): bool => \App\Models\Organization::currentUsesDropship()),
                 Select::make('supplier_id')
                     ->label('Supplier')
                     ->relationship('supplier', 'name')

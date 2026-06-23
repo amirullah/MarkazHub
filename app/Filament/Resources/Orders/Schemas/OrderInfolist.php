@@ -31,7 +31,7 @@ class OrderInfolist
                         ->formatStateUsing(fn ($state) => OrderForm::STATUS[$state] ?? $state),
                     TextEntry::make('fulfillment')->label('Pemenuhan')->badge()->color('gray')
                         ->formatStateUsing(fn ($state) => OrderForm::FULFILLMENT[$state] ?? $state)
-                        ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
+                        ->visible(fn (): bool => \App\Models\Organization::currentUsesDropship()),
                     TextEntry::make('buyer_name')->label('Pembeli')->placeholder('—'),
                     TextEntry::make('income_verified')->label('Laba')->badge()
                         ->formatStateUsing(fn ($state) => $state ? 'Final' : 'Estimasi')
@@ -56,7 +56,7 @@ class OrderInfolist
                         // (fallback ke total dropship bila modal historis belum terisi).
                         ->state(function ($record): float {
                             $cogs = (float) $record->cogs;
-                            if (\App\Models\Organization::currentUsesJakmall()) {
+                            if (\App\Models\Organization::currentUsesDropship()) {
                                 return $cogs;
                             }
                             $modal = (float) $record->dropship_modal;
@@ -68,7 +68,7 @@ class OrderInfolist
                     TextEntry::make('shipping_cost_seller')->label('Ongkir Ditanggung Seller')->formatStateUsing($rp),
                     TextEntry::make('voucher_seller_borne')->label('Voucher Ditanggung Seller')->formatStateUsing($rp),
                     TextEntry::make('dropship_cost')->label('Biaya Dropship')->formatStateUsing($rp)
-                        ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
+                        ->visible(fn (): bool => \App\Models\Organization::currentUsesDropship()),
                     TextEntry::make('other_cost')->label('Biaya Lain')->formatStateUsing($rp),
                 ]),
 

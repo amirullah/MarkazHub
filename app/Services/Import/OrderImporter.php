@@ -12,12 +12,12 @@ use Illuminate\Support\Facades\DB;
  */
 class OrderImporter
 {
-    private bool $usesJakmall;
+    private bool $usesDropship;
 
     public function __construct(private int $orgId)
     {
         // Org yang tidak memakai Jakmall: file master/laporan Jakmall dilewati saat import.
-        $this->usesJakmall = (bool) (DB::table('organizations')->where('id', $orgId)->value('uses_jakmall') ?? true);
+        $this->usesDropship = (bool) (DB::table('organizations')->where('id', $orgId)->value('uses_dropship') ?? true);
     }
 
     private function group(string $marketplace): string
@@ -40,7 +40,7 @@ class OrderImporter
             $label = $srcLabel[$res['source'] ?? ''] ?? 'File';
             // Org non-Jakmall: lewati hanya LAPORAN PESANAN (dropship). Master produk
             // tetap diproses karena = katalog harga/HPP + riwayat harga (relevan walau dropship off).
-            if (! $this->usesJakmall && ($res['type'] ?? '') === 'jakmall_orders') {
+            if (! $this->usesDropship && ($res['type'] ?? '') === 'jakmall_orders') {
                 $report[] = ['name' => $name, 'ok' => false, 'reason' => 'Laporan Pesanan Jakmall (dropship) dilewati — organisasi tidak memakai dropship Jakmall. (Master produk tetap diproses.)'];
                 continue;
             }
