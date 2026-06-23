@@ -42,6 +42,20 @@ class ProductsTable
                     ->color('info')
                     ->placeholder('—')
                     ->toggleable(),
+                TextColumn::make('category.fee_shopee')
+                    ->label('Admin Shopee')
+                    ->formatStateUsing(fn ($state): string => $state !== null
+                        ? rtrim(rtrim(number_format((float) $state, 2, ',', '.'), '0'), ',') . '%' : '—')
+                    ->placeholder('—')
+                    ->alignEnd()
+                    ->toggleable(),
+                TextColumn::make('category.fee_tokotiktok')
+                    ->label('Admin Toped/TikTok')
+                    ->formatStateUsing(fn ($state): string => $state !== null
+                        ? rtrim(rtrim(number_format((float) $state, 2, ',', '.'), '0'), ',') . '%' : '—')
+                    ->placeholder('—')
+                    ->alignEnd()
+                    ->toggleable(),
                 TextColumn::make('supplier.name')
                     ->label('Supplier')
                     ->placeholder('—')
