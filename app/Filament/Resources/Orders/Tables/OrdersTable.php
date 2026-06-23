@@ -52,7 +52,8 @@ class OrdersTable
                     ->label('Pemenuhan')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'DROPSHIP' ? 'info' : 'gray')
-                    ->formatStateUsing(fn (string $state): string => $state === 'DROPSHIP' ? 'Dropship' : 'Packing Sendiri'),
+                    ->formatStateUsing(fn (string $state): string => $state === 'DROPSHIP' ? 'Dropship' : 'Packing Sendiri')
+                    ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
@@ -127,7 +128,8 @@ class OrdersTable
                     ->options([
                         'SELF' => 'Packing Sendiri',
                         'DROPSHIP' => 'Dropship',
-                    ]),
+                    ])
+                    ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
                 TernaryFilter::make('income_verified')
                     ->label('Laba Final')
                     ->placeholder('Semua')

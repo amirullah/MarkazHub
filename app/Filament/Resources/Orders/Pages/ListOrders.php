@@ -58,7 +58,7 @@ class ListOrders extends ListRecords
                 ->modalHeading('Isi estimasi biaya admin')
                 ->modalDescription(function (): string {
                     $tanpaKategori = \App\Models\Product::whereNull('category_id')->count();
-                    $base = 'Mengisi biaya admin (estimasi dari % kategori produk) untuk pesanan yang BELUM punya biaya admin & belum final. Pesanan dengan laba final tidak diubah.';
+                    $base = 'Mengisi biaya admin (estimasi dari % kategori produk + biaya proses Rp1.250/pesanan) untuk pesanan yang BELUM punya biaya admin & belum final. Pesanan dengan laba final tidak diubah.';
                     if ($tanpaKategori > 0) {
                         return $base . " ⚠️ PERHATIAN: {$tanpaKategori} produk belum punya kategori sehingga estimasinya TIDAK akan terisi. Pasang kategori dulu di menu Produk → tombol \"Auto-pasang Kategori\".";
                     }

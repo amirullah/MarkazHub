@@ -35,7 +35,8 @@ class ProductsTable
                     ->label('Modal Dropship')
                     ->formatStateUsing(fn ($state): string => 'Rp ' . number_format((float) $state, 0, ',', '.'))
                     ->sortable()
-                    ->alignEnd(),
+                    ->alignEnd()
+                    ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
                 TextColumn::make('category.name')
                     ->label('Kategori')
                     ->badge()

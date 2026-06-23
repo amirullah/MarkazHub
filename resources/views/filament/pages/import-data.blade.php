@@ -24,10 +24,12 @@
                     <div style="font-weight:600;color:#1e293b">📦 File Pesanan</div>
                     <div style="font-size:.8rem;color:#64748b;margin-top:.25rem">Daftar pesanan, produk, qty, &amp; status (selesai/dikirim/retur/batal).</div>
                 </div>
-                <div style="{{ $mini }}">
-                    <div style="font-weight:600;color:#1e293b">🗂️ Master / Laporan Jakmall</div>
-                    <div style="font-size:.8rem;color:#64748b;margin-top:.25rem">Katalog produk &amp; <strong>HPP/modal</strong> (untuk hitung laba).</div>
-                </div>
+                @if (\App\Models\Organization::currentUsesJakmall())
+                    <div style="{{ $mini }}">
+                        <div style="font-weight:600;color:#1e293b">🗂️ Master / Laporan Jakmall</div>
+                        <div style="font-size:.8rem;color:#64748b;margin-top:.25rem">Katalog produk &amp; <strong>HPP/modal</strong> (untuk hitung laba).</div>
+                    </div>
+                @endif
             </div>
             <p style="margin:.8rem 0 0;font-size:.8rem;color:#64748b">💡 File yang channel-nya tidak cocok dengan toko otomatis dilewati (tidak menggagalkan file lain). Aman mengunggah ulang — data yang sama akan diperbarui, bukan dobel.</p>
         </div>

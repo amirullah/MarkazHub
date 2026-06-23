@@ -30,7 +30,8 @@ class OrderInfolist
                     TextEntry::make('status')->label('Status')->badge()
                         ->formatStateUsing(fn ($state) => OrderForm::STATUS[$state] ?? $state),
                     TextEntry::make('fulfillment')->label('Pemenuhan')->badge()->color('gray')
-                        ->formatStateUsing(fn ($state) => OrderForm::FULFILLMENT[$state] ?? $state),
+                        ->formatStateUsing(fn ($state) => OrderForm::FULFILLMENT[$state] ?? $state)
+                        ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
                     TextEntry::make('buyer_name')->label('Pembeli')->placeholder('—'),
                     TextEntry::make('income_verified')->label('Laba')->badge()
                         ->formatStateUsing(fn ($state) => $state ? 'Final' : 'Estimasi')
@@ -51,10 +52,12 @@ class OrderInfolist
                 ->columns(3)
                 ->schema([
                     TextEntry::make('cogs')->label('HPP / Modal')->formatStateUsing($rp),
-                    TextEntry::make('admin_fee')->label('Biaya Admin')->formatStateUsing($rp),
+                    TextEntry::make('admin_fee')->label('Biaya Admin')->formatStateUsing($rp)
+                        ->tooltip('Untuk pesanan estimasi, sudah termasuk biaya proses Rp1.250/pesanan.'),
                     TextEntry::make('shipping_cost_seller')->label('Ongkir Ditanggung Seller')->formatStateUsing($rp),
                     TextEntry::make('voucher_seller_borne')->label('Voucher Ditanggung Seller')->formatStateUsing($rp),
-                    TextEntry::make('dropship_cost')->label('Biaya Dropship')->formatStateUsing($rp),
+                    TextEntry::make('dropship_cost')->label('Biaya Dropship')->formatStateUsing($rp)
+                        ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
                     TextEntry::make('other_cost')->label('Biaya Lain')->formatStateUsing($rp),
                 ]),
 

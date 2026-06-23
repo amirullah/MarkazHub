@@ -12,7 +12,13 @@ use Illuminate\Support\Facades\DB;
  */
 class OrderImporter
 {
-    public function __construct(private int $orgId) {}
+    private bool $usesJakmall;
+
+    public function __construct(private int $orgId)
+    {
+        // Org yang tidak memakai Jakmall: file master/laporan Jakmall dilewati saat import.
+        $this->usesJakmall = (bool) (DB::table('organizations')->where('id', $orgId)->value('uses_jakmall') ?? true);
+    }
 
     private function group(string $marketplace): string
     {
@@ -32,6 +38,11 @@ class OrderImporter
         foreach ($files as $f) {
             $name = $f['name']; $res = mp_read_file($f['path'], $name);
             $label = $srcLabel[$res['source'] ?? ''] ?? 'File';
+            // Org non-Jakmall: lewati file Jakmall (tidak menggagalkan file lain).
+            if (! $this->usesJakmall && in_array($res['type'] ?? '', ['jakmall', 'jakmall_orders'], true)) {
+                $report[] = ['name' => $name, 'ok' => false, 'reason' => 'Organisasi ini tidak memakai Jakmall — file dilewati (aktifkan di menu Pengaturan bila perlu).'];
+                continue;
+            }
             if ($res['type'] === 'jakmall') {
                 foreach ($res['products'] as $p) $jakmall[$p['sku']] = $p;
                 $report[] = ['name' => $name, 'ok' => true, 'type' => $label, 'detail' => count($res['products']) . ' produk'];

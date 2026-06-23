@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Organization extends Model
 {
-    protected $fillable = ['name', 'slug', 'active'];
+    protected $fillable = ['name', 'slug', 'active', 'uses_jakmall'];
 
     protected static function booted(): void
     {
@@ -24,7 +24,16 @@ class Organization extends Model
 
     protected function casts(): array
     {
-        return ['active' => 'boolean'];
+        return ['active' => 'boolean', 'uses_jakmall' => 'boolean'];
+    }
+
+    /**
+     * Apakah org user saat ini memakai Jakmall (dropship)? Dipakai untuk menyembunyikan
+     * UI dropship bila seller tidak pakai Jakmall. Default true (aman bila kolom belum ada).
+     */
+    public static function currentUsesJakmall(): bool
+    {
+        return (bool) (auth()->user()?->organization?->uses_jakmall ?? true);
     }
 
     public function users(): HasMany

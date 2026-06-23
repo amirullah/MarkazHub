@@ -69,7 +69,8 @@ class OrderForm
                             ->options(self::FULFILLMENT)
                             ->default('SELF')
                             ->required()
-                            ->native(false),
+                            ->native(false)
+                            ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
                         TextInput::make('buyer_name')
                             ->label('Nama Pembeli')
                             ->maxLength(255),
@@ -99,6 +100,7 @@ class OrderForm
                             ->required()->numeric()->minValue(0)->default(0)->prefix('Rp'),
                         TextInput::make('admin_fee')
                             ->label('Biaya Admin Marketplace')
+                            ->helperText('Untuk pesanan estimasi, angka ini sudah termasuk biaya proses Rp1.250/pesanan.')
                             ->required()->numeric()->minValue(0)->default(0)->prefix('Rp'),
                         TextInput::make('shipping_cost_seller')
                             ->label('Ongkir Ditanggung Penjual')
@@ -108,7 +110,8 @@ class OrderForm
                             ->required()->numeric()->minValue(0)->default(0)->prefix('Rp'),
                         TextInput::make('dropship_cost')
                             ->label('Biaya Dropship')
-                            ->required()->numeric()->minValue(0)->default(0)->prefix('Rp'),
+                            ->required()->numeric()->minValue(0)->default(0)->prefix('Rp')
+                            ->visible(fn (): bool => \App\Models\Organization::currentUsesJakmall()),
                         TextInput::make('other_cost')
                             ->label('Biaya Lain')
                             ->required()->numeric()->minValue(0)->default(0)->prefix('Rp'),
