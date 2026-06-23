@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Orders\Schemas;
 
+use App\Filament\Resources\Orders\Tables\OrdersTable;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -54,9 +55,12 @@ class OrderInfolist
                         ->formatStateUsing(fn ($state) => OrderForm::FULFILLMENT[$state] ?? $state)
                         ->visible(fn (): bool => \App\Models\Organization::currentUsesDropship()),
                     TextEntry::make('buyer_name')->label('Pembeli')->placeholder('—'),
-                    TextEntry::make('income_verified')->label('Laba')->badge()
-                        ->formatStateUsing(fn ($state) => $state ? 'Final' : 'Estimasi')
-                        ->color(fn ($state) => $state ? 'success' : 'gray'),
+                    // Badge "Laba" memakai SUMBER TUNGGAL yang sama dgn kolom & filter tabel
+                    // (statusLaba), agar tak bertentangan dgn kotak "⚠️ Laba Belum Pasti" di atas.
+                    TextEntry::make('status_laba')->label('Laba')->badge()
+                        ->state(fn ($record): string => OrdersTable::statusLaba($record))
+                        ->color(fn (string $state): string => OrdersTable::statusLabaColor($state))
+                        ->icon(fn (string $state): ?string => OrdersTable::statusLabaIcon($state)),
                 ]),
 
             Section::make('Pendapatan')

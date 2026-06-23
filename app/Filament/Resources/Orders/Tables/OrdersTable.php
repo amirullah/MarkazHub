@@ -11,7 +11,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -90,28 +89,13 @@ class OrdersTable
                 TextColumn::make('status_laba')
                     ->label('Status Laba')
                     ->badge()
-                    ->state(function (\App\Models\Order $record): string {
-                        $gaps = $record->incompleteness();
-                        if (empty($gaps)) {
-                            // Laba final. "Final*" bila rincian item belum ada (laba tetap pasti).
-                            return $record->lacksItemDetail() ? 'Final*' : 'Final';
-                        }
-                        $dataGaps = array_filter($gaps, fn (string $g): bool => ! str_contains($g, 'ESTIMASI'));
-
-                        return $dataGaps ? 'Perlu data' : 'Estimasi';
-                    })
-                    ->color(fn (string $state): string => match ($state) {
-                        'Final', 'Final*' => 'success',
-                        'Perlu data' => 'warning',
-                        default => 'gray',
-                    })
-                    ->icon(fn (string $state): string => match ($state) {
-                        'Final' => 'heroicon-m-check-circle',
-                        'Final*' => 'heroicon-m-information-circle',
-                        'Perlu data' => 'heroicon-m-exclamation-triangle',
-                        default => 'heroicon-m-clock',
-                    })
+                    ->state(fn (\App\Models\Order $record): string => self::statusLaba($record))
+                    ->color(fn (string $state): string => self::statusLabaColor($state))
+                    ->icon(fn (string $state): ?string => self::statusLabaIcon($state))
                     ->tooltip(function (\App\Models\Order $record): string {
+                        if (in_array($record->status, ['CANCELLED', 'RETURNED'], true)) {
+                            return 'Pesanan batal/retur — tidak dihitung dalam laba.';
+                        }
                         $g = $record->incompleteness();
                         if ($g) {
                             return 'Belum: ' . implode(' · ', $g);
@@ -165,11 +149,19 @@ class OrdersTable
                         'DROPSHIP' => 'Dropship',
                     ])
                     ->visible(fn (): bool => \App\Models\Organization::currentUsesDropship()),
-                TernaryFilter::make('income_verified')
-                    ->label('Laba Final')
-                    ->placeholder('Semua')
-                    ->trueLabel('Final')
-                    ->falseLabel('Estimasi (belum ada Laporan Penghasilan)'),
+                SelectFilter::make('status_laba')
+                    ->label('Status Laba')
+                    // Opsi MENCERMINKAN persis kolom Status Laba (lihat self::statusLaba()).
+                    ->options([
+                        'final' => 'Final — lengkap',
+                        'final_tanpa_item' => 'Final — tanpa rincian item',
+                        'perlu_data' => 'Perlu data (modal/biaya belum ada)',
+                        'estimasi' => 'Estimasi (laporan penghasilan belum ada)',
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => $query->when(
+                        $data['value'] ?? null,
+                        fn (Builder $q, $v): Builder => self::applyStatusLaba($q, $v),
+                    )),
                 Filter::make('periode')
                     ->schema([
                         Select::make('value')
@@ -203,6 +195,68 @@ class OrdersTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Status Laba sebuah pesanan (SUMBER TUNGGAL untuk kolom & dipakai verifikasi).
+     * '—' utk batal/retur (laba tak relevan), selain itu cermin incompleteness().
+     */
+    public static function statusLaba(\App\Models\Order $record): string
+    {
+        if (in_array($record->status, ['CANCELLED', 'RETURNED'], true)) {
+            return '—';
+        }
+        $gaps = $record->incompleteness();
+        if (empty($gaps)) {
+            return $record->lacksItemDetail() ? 'Final*' : 'Final';
+        }
+        $dataGaps = array_filter($gaps, fn (string $g): bool => ! str_contains($g, 'ESTIMASI'));
+
+        return $dataGaps ? 'Perlu data' : 'Estimasi';
+    }
+
+    /** Warna badge Status Laba — dipakai bersama oleh tabel & halaman detail (anti-melenceng). */
+    public static function statusLabaColor(string $state): string
+    {
+        return match ($state) {
+            'Final', 'Final*' => 'success',
+            'Perlu data' => 'warning',
+            default => 'gray', // 'Estimasi' & '—' (batal/retur)
+        };
+    }
+
+    /** Ikon badge Status Laba — dipakai bersama oleh tabel & halaman detail. */
+    public static function statusLabaIcon(string $state): ?string
+    {
+        return match ($state) {
+            'Final' => 'heroicon-m-check-circle',
+            'Final*' => 'heroicon-m-information-circle',
+            'Perlu data' => 'heroicon-m-exclamation-triangle',
+            'Estimasi' => 'heroicon-m-clock',
+            default => null, // '—' tanpa ikon
+        };
+    }
+
+    /**
+     * Query filter "Status Laba" — MENCERMINKAN persis self::statusLaba()/incompleteness().
+     * Batal & retur (yang di kolom jadi '—') otomatis dikecualikan dari semua opsi.
+     */
+    private static function applyStatusLaba(Builder $q, string $v): Builder
+    {
+        // "gap data" = modal/HPP atau biaya dropship belum ada → laba belum akurat ("Perlu data").
+        $dataGap = function (Builder $q): void {
+            $q->where(fn (Builder $q) => $q->where('fulfillment', 'SELF')->where('product_revenue', '>', 0)->where('cogs', '<=', 0))
+                ->orWhere(fn (Builder $q) => $q->where('fulfillment', 'DROPSHIP')->where('dropship_cost', '<=', 0));
+        };
+        $aktif = fn (Builder $q): Builder => $q->whereNotIn('status', ['CANCELLED', 'RETURNED']);
+
+        return match ($v) {
+            'final' => $aktif($q)->where('income_verified', true)->whereNot($dataGap)->has('items'),
+            'final_tanpa_item' => $aktif($q)->where('income_verified', true)->whereNot($dataGap)->doesntHave('items'),
+            'perlu_data' => $aktif($q)->where($dataGap),
+            'estimasi' => $aktif($q)->where('income_verified', false)->whereNot($dataGap),
+            default => $q,
+        };
     }
 
     /** Terapkan preset periode ke query — filter cepat tanpa pilih tanggal manual. */
