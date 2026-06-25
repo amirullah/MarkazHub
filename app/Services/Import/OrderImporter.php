@@ -323,12 +323,20 @@ class OrderImporter
             . 'p.cost_price)';
     }
 
+    /**
+     * JOIN untuk UPDATE HPP item. STRAIGHT_JOIN MEMAKSA urutan order_items→orders→products.
+     * KRITIS: tanpa ini, optimizer keliru menggiring dari `products` lalu FULL-SCAN `orders`
+     * per produk → UPDATE jadi PULUHAN DETIK (walau cuma 1 baris). Dengan STRAIGHT_JOIN: ±30ms.
+     */
+    private const HPP_JOIN = 'STRAIGHT_JOIN orders o ON o.id=i.order_id STRAIGHT_JOIN products p ON p.sku=i.sku AND p.organization_id=o.organization_id';
+
     /** Isi HPP yang masih kosong (jangan timpa HPP lama). HPP = harga modal saat TANGGAL pesanan. */
     public function backfillHpp(): int
     {
         $cond = "o.organization_id = ? AND o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF' AND o.deleted_at IS NULL";
         $before = (int) DB::selectOne("SELECT COUNT(*) c FROM orders o WHERE $cond AND o.cogs=0", [$this->orgId])->c;
-        DB::statement("UPDATE order_items i JOIN orders o ON o.id=i.order_id JOIN products p ON p.sku=i.sku AND p.organization_id=o.organization_id
+        if ($before === 0) return 0; // katalog sudah lengkap → tak ada yang perlu diisi
+        DB::statement("UPDATE order_items i " . self::HPP_JOIN . "
             SET i.unit_cost=" . $this->histCostExpr() . " WHERE $cond AND (i.unit_cost=0 OR i.unit_cost IS NULL)", [$this->orgId]);
         DB::statement("UPDATE orders o SET o.cogs=COALESCE((SELECT SUM(i.unit_cost*i.qty) FROM order_items i WHERE i.order_id=o.id),0)
             WHERE $cond AND o.cogs=0", [$this->orgId]);
@@ -347,7 +355,7 @@ class OrderImporter
         $cond = "o.organization_id = ? AND o.status NOT IN ('CANCELLED','RETURNED') AND o.fulfillment='SELF' AND o.deleted_at IS NULL"
             . ($since ? " AND o.order_date >= " . DB::getPdo()->quote($since) : '');
         $costExpr = $historical ? $this->histCostExpr() : 'p.cost_price';
-        DB::statement("UPDATE order_items i JOIN orders o ON o.id=i.order_id JOIN products p ON p.sku=i.sku AND p.organization_id=o.organization_id
+        DB::statement("UPDATE order_items i " . self::HPP_JOIN . "
             SET i.unit_cost=$costExpr WHERE $cond", [$this->orgId]);
         return DB::update("UPDATE orders o SET o.cogs=COALESCE((SELECT SUM(i.unit_cost*i.qty) FROM order_items i WHERE i.order_id=o.id),0) WHERE $cond", [$this->orgId]);
     }
