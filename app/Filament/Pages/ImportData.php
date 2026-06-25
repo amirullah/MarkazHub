@@ -10,7 +10,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\Radio;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
@@ -112,12 +112,18 @@ class ImportData extends Page
                     ->default('Stok Sendiri')
                     ->required()
                     ->helperText('Mis. "Stok Sendiri", "Supplier A". Dibuat otomatis jika belum ada.'),
-                Toggle::make('update_old_hpp_dated')
-                    ->label('Sesuaikan HPP pesanan lama SESUAI TANGGAL pesanan (pakai riwayat harga)')
-                    ->helperText('Pilih bila file memuat perubahan harga ber-tanggal LAMPAU (mundur/backdated): tiap pesanan lama dihitung ulang memakai harga modal yang BERLAKU saat tanggalnya. Paling akurat. (HPP yang diedit manual akan tertimpa.)'),
-                Toggle::make('update_old_hpp')
-                    ->label('Atau: samakan SEMUA HPP pesanan lama dengan harga modal TERBARU ini')
-                    ->helperText('Timpa HPP semua pesanan lama dengan harga terkini, ABAIKAN tanggal. Jarang dibutuhkan. Default (keduanya mati): HPP pesanan lama tidak diubah, hanya yang belum terisi.'),
+                Radio::make('hpp_mode')
+                    ->label('HPP pesanan lama')
+                    ->options([
+                        'none' => 'Jangan ubah (default) — hanya isi HPP yang masih kosong',
+                        'dated' => 'Sesuaikan SESUAI TANGGAL pesanan (disarankan)',
+                        'current' => 'Samakan dengan harga modal TERBARU (abaikan tanggal)',
+                    ])
+                    ->descriptions([
+                        'dated' => 'Tiap pesanan lama pakai modal yang BERLAKU saat tanggalnya — tepat bila ada perubahan harga mundur/backdated. (HPP yang diedit manual akan tertimpa.)',
+                        'current' => 'Timpa HPP semua pesanan lama dengan modal terkini, abaikan tanggal. Jarang dibutuhkan.',
+                    ])
+                    ->default('none'),
             ])
             ->action(fn (array $data) => $this->runCatalogImport($data));
     }
@@ -249,8 +255,8 @@ class ImportData extends Page
             $file->getClientOriginalName(),
             (string) ($data['supplier_name'] ?? ''),
             false, // bukan dropship — dropship punya menu sendiri
-            (bool) ($data['update_old_hpp'] ?? false),
-            (bool) ($data['update_old_hpp_dated'] ?? false),
+            ($data['hpp_mode'] ?? 'none') === 'current',
+            ($data['hpp_mode'] ?? 'none') === 'dated',
         );
 
         if (! ($res['ok'] ?? false)) {
