@@ -43,13 +43,22 @@ class ImportSuggestion
     {
         $out = [];
 
+        // File Laporan Marketplace di-download PER TOKO dari seller center → cantumkan nama toko
+        // agar user tahu harus ambil file dari toko yang mana.
+        $stores = \App\Models\Store::query()->get()->keyBy('id');
+        $storeSuffix = function ($sid) use ($stores) {
+            $s = $sid ? $stores->get($sid) : null;
+            return $s ? ' — toko ' . $s->name : '';
+        };
+
         // 1) LAPORAN PENGHASILAN — biaya admin/komisi masih estimasi (income_verified=false). Paling berdampak.
+        //    Dipecah per TOKO: tiap toko punya laporan penghasilan sendiri di seller center.
         foreach (self::base()->where('income_verified', false)
-            ->selectRaw('marketplace, COUNT(*) c, MIN(order_date) dari, MAX(order_date) sampai')
-            ->groupBy('marketplace')->orderByDesc('c')->get() as $r) {
+            ->selectRaw('store_id, marketplace, COUNT(*) c, MIN(order_date) dari, MAX(order_date) sampai')
+            ->groupBy('store_id', 'marketplace')->orderByDesc('c')->get() as $r) {
             $out[] = [
                 'urgency' => 'high',
-                'file' => 'Laporan Penghasilan ' . self::channelLabel($r->marketplace),
+                'file' => 'Laporan Penghasilan ' . self::channelLabel($r->marketplace) . $storeSuffix($r->store_id),
                 'via' => 'Laporan Marketplace',
                 'dari' => self::fmt($r->dari),
                 'sampai' => self::fmt($r->sampai),
@@ -58,13 +67,13 @@ class ImportSuggestion
             ];
         }
 
-        // 2) FILE PESANAN — rincian produk/SKU/qty belum ada (tak punya item sama sekali).
+        // 2) FILE PESANAN — rincian produk/SKU/qty belum ada (tak punya item sama sekali). Per TOKO.
         foreach (self::base()->doesntHave('items')
-            ->selectRaw('marketplace, COUNT(*) c, MIN(order_date) dari, MAX(order_date) sampai')
-            ->groupBy('marketplace')->orderByDesc('c')->get() as $r) {
+            ->selectRaw('store_id, marketplace, COUNT(*) c, MIN(order_date) dari, MAX(order_date) sampai')
+            ->groupBy('store_id', 'marketplace')->orderByDesc('c')->get() as $r) {
             $out[] = [
                 'urgency' => 'medium',
-                'file' => 'File Pesanan (Order Completed / Pesanan Selesai) ' . self::channelLabel($r->marketplace),
+                'file' => 'File Pesanan (Order Completed / Pesanan Selesai) ' . self::channelLabel($r->marketplace) . $storeSuffix($r->store_id),
                 'via' => 'Laporan Marketplace',
                 'dari' => self::fmt($r->dari),
                 'sampai' => self::fmt($r->sampai),
@@ -73,8 +82,11 @@ class ImportSuggestion
             ];
         }
 
-        // 3) DAFTAR PRODUK (HPP) — pesanan packing-sendiri tanpa modal.
+        // 3) DAFTAR PRODUK (HPP) — packing-sendiri tanpa modal TAPI sudah punya item (SKU).
+        //    Yang belum punya item ditangani butir "File Pesanan" di atas — Daftar Produk TAK BISA
+        //    mengisi HPP tanpa SKU. Daftar Produk berlaku se-organisasi → tak dipecah per toko.
         $r = self::base()->where('fulfillment', 'SELF')->where('product_revenue', '>', 0)->where('cogs', '<=', 0)
+            ->has('items')
             ->selectRaw('COUNT(*) c, MIN(order_date) dari, MAX(order_date) sampai')->first();
         if ($r && (int) $r->c > 0) {
             $out[] = [
@@ -84,7 +96,7 @@ class ImportSuggestion
                 'dari' => self::fmt($r->dari),
                 'sampai' => self::fmt($r->sampai),
                 'count' => (int) $r->c,
-                'note' => 'HPP/modal pesanan packing-sendiri belum ada',
+                'note' => 'produk sudah tercatat tapi modal/HPP-nya belum ada di Daftar Produk',
             ];
         }
 
