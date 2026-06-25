@@ -45,7 +45,7 @@
     {{-- Perbandingan bulanan per toko (matriks toko × bulan) --}}
     <x-filament::section>
         <x-slot name="heading">Perbandingan Bulanan per Toko — {{ $tahun }}</x-slot>
-        <x-slot name="description">Semua toko & bulan tampil sekaligus agar mudah dibandingkan. Klik sel untuk membuka pesanannya. Batal/retur tidak dihitung.</x-slot>
+        <x-slot name="description">Semua toko & bulan tampil sekaligus agar mudah dibandingkan. <b>Klik judul kolom</b> (Toko / bulan / Total) untuk mengurutkan — klik lagi untuk balik arah (▲/▼). Klik sel untuk membuka pesanannya. Batal/retur tidak dihitung.</x-slot>
         {{-- Pemilih metrik --}}
         <div style="display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;margin-bottom:.75rem">
             <span style="font-size:.78rem;color:#64748b;font-weight:600;margin-right:.15rem">Tampilkan:</span>
@@ -64,15 +64,16 @@
                 $color = $metrik === 'laba' ? ($v < 0 ? '#dc2626' : '#16a34a') : '#0f172a';
                 return ['Rp ' . number_format($v, 0, ',', '.'), $color];
             };
+            $panah = fn ($kol) => $urutKolom === (string) $kol ? ($urutArah === 'asc' ? ' ▲' : ' ▼') : '';
         @endphp
         <div style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse;white-space:nowrap">
                 <thead><tr>
-                    <th style="{{ $stickyTh }}">Toko</th>
+                    <th style="{{ $stickyTh }};cursor:pointer;user-select:none" wire:click="urutkan('nama')" title="Urutkan nama toko">Toko{{ $panah('nama') }}</th>
                     @foreach ($namaBulan as $mi => $mn)
-                        <th style="{{ $th }};text-align:right">{{ \Illuminate\Support\Str::substr($mn, 0, 3) }}</th>
+                        <th style="{{ $th }};text-align:right;cursor:pointer;user-select:none" wire:click="urutkan('{{ $mi }}')" title="Urutkan {{ $mn }}">{{ \Illuminate\Support\Str::substr($mn, 0, 3) }}{{ $panah($mi) }}</th>
                     @endforeach
-                    <th style="{{ $th }};text-align:right;border-left:1px solid #e8edf3">Total</th>
+                    <th style="{{ $th }};text-align:right;border-left:1px solid #e8edf3;cursor:pointer;user-select:none" wire:click="urutkan('total')" title="Urutkan Total">Total{{ $panah('total') }}</th>
                 </tr></thead>
                 <tbody>
                 @forelse ($matriks as $row)

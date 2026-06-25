@@ -30,6 +30,11 @@ class Laporan extends Page
     /** Metrik yang ditampilkan di matriks perbandingan bulanan: laba | omzet | jml. */
     public string $metrik = 'laba';
 
+    /** Urutan matriks: kolom ('nama' | 'total' | '1'..'12') + arah ('asc' | 'desc'). */
+    public string $urutKolom = 'total';
+
+    public string $urutArah = 'desc';
+
     public function mount(): void
     {
         $latest = Order::query()->max('order_date');
@@ -49,6 +54,17 @@ class Laporan extends Page
     public function pilihMetrik(string $metrik): void
     {
         $this->metrik = in_array($metrik, ['laba', 'omzet', 'jml'], true) ? $metrik : 'laba';
+    }
+
+    /** Klik judul kolom: kolom sama → balik arah; kolom beda → set kolom (default desc, nama asc). */
+    public function urutkan(string $kolom): void
+    {
+        if ($this->urutKolom === $kolom) {
+            $this->urutArah = $this->urutArah === 'desc' ? 'asc' : 'desc';
+        } else {
+            $this->urutKolom = $kolom;
+            $this->urutArah = $kolom === 'nama' ? 'asc' : 'desc';
+        }
     }
 
     public function getViewData(): array
@@ -142,7 +158,21 @@ class Laporan extends Page
                 'total' => $rowTot,
             ];
         }
-        usort($matriks, fn ($a, $b) => $b['total']['omzet'] <=> $a['total']['omzet']);
+        // Urutkan sesuai kolom & arah pilihan (kolom bulan/total memakai metrik aktif).
+        $uKol = $this->urutKolom;
+        $uMetrik = $this->metrik;
+        $nilaiUrut = function (array $row) use ($uKol, $uMetrik) {
+            if ($uKol === 'nama') return mb_strtolower($row['nama']);
+            if ($uKol === 'total') return $row['total'][$uMetrik];
+            return $row['bulan'][(int) $uKol][$uMetrik] ?? 0;
+        };
+        $uArah = $this->urutArah;
+        usort($matriks, function ($a, $b) use ($nilaiUrut, $uKol, $uArah) {
+            $va = $nilaiUrut($a);
+            $vb = $nilaiUrut($b);
+            $cmp = $uKol === 'nama' ? strcmp((string) $va, (string) $vb) : ($va <=> $vb);
+            return $uArah === 'asc' ? $cmp : -$cmp;
+        });
 
         // Nilai filter periode utk tautan baris per-toko: 'YYYY' (setahun) atau 'YYYY-MM' (sebulan).
         $periodeValue = $this->bulan ? sprintf('%04d-%02d', $this->tahun, $this->bulan) : (string) $this->tahun;
@@ -155,6 +185,8 @@ class Laporan extends Page
             'colTot' => $colTot,
             'grand' => $grand,
             'metrik' => $this->metrik,
+            'urutKolom' => $this->urutKolom,
+            'urutArah' => $this->urutArah,
             'bulan' => $this->bulan,
             'periodeValue' => $periodeValue,
             'years' => $years,
