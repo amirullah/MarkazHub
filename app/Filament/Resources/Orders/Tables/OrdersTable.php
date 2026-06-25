@@ -202,6 +202,18 @@ class OrdersTable
                     ))
                     ->indicateUsing(fn (array $data): ?string => ($v = $data['value'] ?? null) && $v !== 'semua'
                         ? 'Hasil: ' . ucfirst($v) : null),
+                // Jual di bawah modal — harga jual produk < HPP/biaya dropship (anomali harga/biaya).
+                Filter::make('bawah_modal')
+                    ->schema([
+                        ToggleButtons::make('value')->label('Bawah modal')->hiddenLabel()->inline()
+                            ->options(['semua' => 'Semua', 'bawah' => 'Jual di bawah modal'])->default('semua'),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => $query->when(
+                        ($data['value'] ?? null) === 'bawah',
+                        fn (Builder $query): Builder => $query->bawahModal(),
+                    ))
+                    ->indicateUsing(fn (array $data): ?string => ($data['value'] ?? null) === 'bawah'
+                        ? 'Jual di bawah modal' : null),
                 // Pesanan janggal — pemenuhan tak sesuai mode toko.
                 Filter::make('janggal')
                     ->schema([

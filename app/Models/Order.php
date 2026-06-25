@@ -146,6 +146,19 @@ class Order extends Model
             });
     }
 
+    /**
+     * "Jual di bawah modal": harga jual produk (product_revenue) lebih KECIL dari modal
+     * — HPP (packing sendiri) atau biaya dropship (dropship, ikut toggle). Pertanda harga
+     * keliru, salah supplier, atau biaya dropship salah input. Batal/retur & pesanan tanpa
+     * omzet (belum cair) dikecualikan. SUMBER TUNGGAL (kartu Dashboard + filter Pesanan).
+     */
+    public function scopeBawahModal($query)
+    {
+        return $query->whereNotIn('status', ['CANCELLED', 'RETURNED'])
+            ->where('product_revenue', '>', 0)
+            ->whereRaw('(cogs + ' . ProfitService::dropshipExpr() . ') > product_revenue');
+    }
+
     /** Laba bersih (pakai sumber kebenaran tunggal ProfitService). */
     public function getProfitAttribute(): float
     {

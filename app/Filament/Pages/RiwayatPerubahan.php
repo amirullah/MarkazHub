@@ -26,6 +26,7 @@ class RiwayatPerubahan extends Page
         [
             'date' => '25 Juni 2026',
             'changes' => [
+                'BARU — Penanda "Jual di Bawah Modal": kartu Dashboard + filter di Pesanan yang OTOMATIS menandai pesanan yang harga jualnya LEBIH KECIL dari modal (HPP untuk packing sendiri, biaya dropship untuk dropship). Untuk cepat menemukan produk yang dijual rugi — harga keliru, supplier mahal, atau biaya dropship salah input — tanpa mencari manual.',
                 'Perbaikan laba (settlement belum cair): pesanan "Selesai" yang dananya BELUM cair dari marketplace (settlement masih 0 di laporan, mis. baru selesai & dana TikTok/Tokopedia ditahan dulu) kini berstatus "Belum cair" — TIDAK lagi keliru ditandai "Final" dan tidak tampil rugi palsu (laba pending Rp 0). Begitu dana cair & Anda impor ulang Laporan Penghasilan, labanya jadi final & benar.',
                 'Perbaikan laba dropship: pesanan dropship yang masih "Dibayar" (belum selesai/dicairkan marketplace) TIDAK lagi tampil sebagai rugi palsu. Selama omzet belum keluar, labanya dianggap PENDING (Rp 0) — biaya dropship baru dihitung saat pesanan selesai & omzet masuk. Total Laba jadi lebih akurat (tak terseret pesanan yang belum tuntas).',
                 'Perbaikan PENTING: setelah impor Laporan Marketplace, estimasi biaya admin & laba kini LANGSUNG terhitung otomatis — tak perlu lagi menekan tombol "Isi Estimasi Biaya Admin" manual. (Dulu pesanan baru biayanya 0 sampai tombol itu ditekan, sehingga laba terlihat "belum dihitung".)',

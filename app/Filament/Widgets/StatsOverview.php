@@ -32,6 +32,7 @@ class StatsOverview extends StatsOverviewWidget
                 'pesananRugi' => Order::query()->where('status', 'COMPLETED')->whereRaw(ProfitService::sqlProfit() . ' < 0')->count(),
                 'labaSemu' => Order::query()->labaSemu()->count(),
                 'janggal' => Order::query()->janggal()->count(),
+                'bawahModal' => Order::query()->bawahModal()->count(),
                 'sparkLaba' => array_values(array_map(fn ($m) => round($m['laba']), $months)),
                 'sparkOmzet' => array_values(array_map(fn ($m) => round($m['omzet']), $months)),
             ];
@@ -46,6 +47,7 @@ class StatsOverview extends StatsOverviewWidget
         $pesananRugi = $d['pesananRugi'];
         $labaSemu = $d['labaSemu'] ?? 0;
         $janggal = $d['janggal'] ?? 0;
+        $bawahModal = $d['bawahModal'] ?? 0;
         $sparkLaba = $d['sparkLaba'];
         $sparkOmzet = $d['sparkOmzet'];
         $aov = $jumlah > 0 ? $omzet / $jumlah : 0;
@@ -96,6 +98,11 @@ class StatsOverview extends StatsOverviewWidget
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color($labaSemu > 0 ? 'danger' : 'success')
                 ->url($ordersUrl(['status_laba' => ['value' => 'laba_semu']])),
+            Stat::make('Jual di Bawah Modal', number_format($bawahModal, 0, ',', '.'))
+                ->description($bawahModal > 0 ? 'harga jual < modal (HPP/dropship) — cek harga/supplier' : 'tak ada yang dijual di bawah modal')
+                ->descriptionIcon('heroicon-m-arrow-trending-down')
+                ->color($bawahModal > 0 ? 'danger' : 'success')
+                ->url($ordersUrl(['bawah_modal' => ['value' => 'bawah']])),
             // Kartu Janggal hanya tampil bila berjualan dropship (sesuai toggle Pengaturan).
             ...(\App\Models\Organization::currentUsesDropship() ? [
                 Stat::make('Pesanan Janggal', number_format($janggal, 0, ',', '.'))
