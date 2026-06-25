@@ -23,13 +23,7 @@
         $totTokoOmzet = collect($perToko)->sum('omzet');
         $totTokoLaba = collect($perToko)->sum('laba');
         $totTokoJml = collect($perToko)->sum('jml');
-        // Format ringkas utk matriks (1,2 jt / 850 rb) + tautan sel toko×bulan.
-        $rpShort = function ($v) {
-            $a = abs($v); $sign = $v < 0 ? '-' : '';
-            if ($a >= 1e6) return $sign . rtrim(rtrim(number_format($a / 1e6, 1, ',', '.'), '0'), ',') . ' jt';
-            if ($a >= 1e3) return $sign . number_format($a / 1e3, 0, ',', '.') . ' rb';
-            return number_format($v, 0, ',', '.');
-        };
+        // Tautan sel toko×bulan + label metrik (angka matriks ditampilkan penuh, tanpa singkatan).
         $urlCell = fn ($storeId, $m) => $urlOrders . '?' . http_build_query(['filters' => array_filter([
             'store_id' => $storeId ? ['values' => [$storeId]] : null,
             'bulan_tahun' => ['value' => sprintf('%04d-%02d', $tahun, $m)],
@@ -63,12 +57,12 @@
         @php
             $stickyTh = $th . ';position:sticky;left:0;background:#fff;z-index:2';
             $stickyTd = $td . ';position:sticky;left:0;background:#fff;z-index:1;font-weight:600';
-            $cellTxt = function ($cell) use ($metrik, $rpShort) {
+            $cellTxt = function ($cell) use ($metrik) {
                 if ((int) ($cell['jml'] ?? 0) === 0) return ['·', '#cbd5e1'];
                 if ($metrik === 'jml') return [number_format($cell['jml'], 0, ',', '.'), '#475569'];
                 $v = $cell[$metrik];
                 $color = $metrik === 'laba' ? ($v < 0 ? '#dc2626' : '#16a34a') : '#0f172a';
-                return [$rpShort($v), $color];
+                return ['Rp ' . number_format($v, 0, ',', '.'), $color];
             };
         @endphp
         <div style="overflow-x:auto">
