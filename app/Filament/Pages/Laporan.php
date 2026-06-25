@@ -27,6 +27,9 @@ class Laporan extends Page
     /** Bulan (1-12) untuk rincian PER TOKO; null = sepanjang tahun. */
     public ?int $bulan = null;
 
+    /** Metrik yang ditampilkan di matriks perbandingan bulanan: laba | omzet | jml. */
+    public string $metrik = 'laba';
+
     public function mount(): void
     {
         $latest = Order::query()->max('order_date');
@@ -41,6 +44,11 @@ class Laporan extends Page
     public function pilihBulan(?int $bulan): void
     {
         $this->bulan = ($bulan >= 1 && $bulan <= 12) ? $bulan : null;
+    }
+
+    public function pilihMetrik(string $metrik): void
+    {
+        $this->metrik = in_array($metrik, ['laba', 'omzet', 'jml'], true) ? $metrik : 'laba';
     }
 
     public function getViewData(): array
@@ -98,6 +106,44 @@ class Laporan extends Page
             })
             ->sortByDesc('omzet')->values()->all();
 
+        // Matriks PERBANDINGAN: tiap toko (baris) × 12 bulan (kolom) untuk tahun terpilih.
+        $matrixRows = $ops()->whereYear('order_date', $this->tahun)
+            ->selectRaw('store_id, MONTH(order_date) bln, SUM(product_revenue + other_income) omzet, SUM(' . $pf . ') laba, COUNT(*) jml')
+            ->groupBy('store_id', 'bln')->get();
+        $byStore = [];
+        foreach ($matrixRows as $r) {
+            $byStore[$r->store_id ? (int) $r->store_id : 0][(int) $r->bln] = $r;
+        }
+        $colTot = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $colTot[$m] = ['omzet' => 0.0, 'laba' => 0.0, 'jml' => 0];
+        }
+        $grand = ['omzet' => 0.0, 'laba' => 0.0, 'jml' => 0];
+        $matriks = [];
+        foreach ($byStore as $sid => $months) {
+            $s = $sid ? $stores->get($sid) : null;
+            $bulanCells = [];
+            $rowTot = ['omzet' => 0.0, 'laba' => 0.0, 'jml' => 0];
+            for ($m = 1; $m <= 12; $m++) {
+                $rr = $months[$m] ?? null;
+                $cell = ['omzet' => (float) ($rr->omzet ?? 0), 'laba' => (float) ($rr->laba ?? 0), 'jml' => (int) ($rr->jml ?? 0)];
+                $bulanCells[$m] = $cell;
+                foreach (['omzet', 'laba', 'jml'] as $k) {
+                    $rowTot[$k] += $cell[$k];
+                    $colTot[$m][$k] += $cell[$k];
+                    $grand[$k] += $cell[$k];
+                }
+            }
+            $matriks[] = [
+                'store_id' => $sid ?: null,
+                'nama' => $s?->name ?? 'Tanpa toko',
+                'marketplace' => $s?->marketplace,
+                'bulan' => $bulanCells,
+                'total' => $rowTot,
+            ];
+        }
+        usort($matriks, fn ($a, $b) => $b['total']['omzet'] <=> $a['total']['omzet']);
+
         // Nilai filter periode utk tautan baris per-toko: 'YYYY' (setahun) atau 'YYYY-MM' (sebulan).
         $periodeValue = $this->bulan ? sprintf('%04d-%02d', $this->tahun, $this->bulan) : (string) $this->tahun;
 
@@ -105,6 +151,10 @@ class Laporan extends Page
             'tahunan' => $tahunan,
             'bulanan' => $bulanan,
             'perToko' => $perToko,
+            'matriks' => $matriks,
+            'colTot' => $colTot,
+            'grand' => $grand,
+            'metrik' => $this->metrik,
             'bulan' => $this->bulan,
             'periodeValue' => $periodeValue,
             'years' => $years,

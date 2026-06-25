@@ -23,6 +23,18 @@
         $totTokoOmzet = collect($perToko)->sum('omzet');
         $totTokoLaba = collect($perToko)->sum('laba');
         $totTokoJml = collect($perToko)->sum('jml');
+        // Format ringkas utk matriks (1,2 jt / 850 rb) + tautan sel toko×bulan.
+        $rpShort = function ($v) {
+            $a = abs($v); $sign = $v < 0 ? '-' : '';
+            if ($a >= 1e6) return $sign . rtrim(rtrim(number_format($a / 1e6, 1, ',', '.'), '0'), ',') . ' jt';
+            if ($a >= 1e3) return $sign . number_format($a / 1e3, 0, ',', '.') . ' rb';
+            return number_format($v, 0, ',', '.');
+        };
+        $urlCell = fn ($storeId, $m) => $urlOrders . '?' . http_build_query(['filters' => array_filter([
+            'store_id' => $storeId ? ['values' => [$storeId]] : null,
+            'bulan_tahun' => ['value' => sprintf('%04d-%02d', $tahun, $m)],
+        ])]);
+        $metrikLabel = ['laba' => 'Laba', 'omzet' => 'Omzet', 'jml' => 'Pesanan'];
     @endphp
 
     {{-- Pemilih tahun --}}
@@ -35,6 +47,72 @@
             <span style="color:#94a3b8">Belum ada data pesanan.</span>
         @endforelse
     </div>
+
+    {{-- Perbandingan bulanan per toko (matriks toko × bulan) --}}
+    <x-filament::section>
+        <x-slot name="heading">Perbandingan Bulanan per Toko — {{ $tahun }}</x-slot>
+        <x-slot name="description">Semua toko & bulan tampil sekaligus agar mudah dibandingkan. Klik sel untuk membuka pesanannya. Batal/retur tidak dihitung.</x-slot>
+        {{-- Pemilih metrik --}}
+        <div style="display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;margin-bottom:.75rem">
+            <span style="font-size:.78rem;color:#64748b;font-weight:600;margin-right:.15rem">Tampilkan:</span>
+            @foreach ($metrikLabel as $mk => $ml)
+                <button type="button" wire:click="pilihMetrik('{{ $mk }}')"
+                    style="border:1px solid {{ $metrik === $mk ? '#2563eb' : '#e8edf3' }};background:{{ $metrik === $mk ? '#2563eb' : '#fff' }};color:{{ $metrik === $mk ? '#fff' : '#0f172a' }};border-radius:9999px;padding:.18rem .85rem;font-size:.78rem;cursor:pointer">{{ $ml }}</button>
+            @endforeach
+        </div>
+        @php
+            $stickyTh = $th . ';position:sticky;left:0;background:#fff;z-index:2';
+            $stickyTd = $td . ';position:sticky;left:0;background:#fff;z-index:1;font-weight:600';
+            $cellTxt = function ($cell) use ($metrik, $rpShort) {
+                if ((int) ($cell['jml'] ?? 0) === 0) return ['·', '#cbd5e1'];
+                if ($metrik === 'jml') return [number_format($cell['jml'], 0, ',', '.'), '#475569'];
+                $v = $cell[$metrik];
+                $color = $metrik === 'laba' ? ($v < 0 ? '#dc2626' : '#16a34a') : '#0f172a';
+                return [$rpShort($v), $color];
+            };
+        @endphp
+        <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;white-space:nowrap">
+                <thead><tr>
+                    <th style="{{ $stickyTh }}">Toko</th>
+                    @foreach ($namaBulan as $mi => $mn)
+                        <th style="{{ $th }};text-align:right">{{ \Illuminate\Support\Str::substr($mn, 0, 3) }}</th>
+                    @endforeach
+                    <th style="{{ $th }};text-align:right;border-left:1px solid #e8edf3">Total</th>
+                </tr></thead>
+                <tbody>
+                @forelse ($matriks as $row)
+                    <tr>
+                        <td style="{{ $stickyTd }}">
+                            {{ $row['nama'] }}
+                            @if ($row['marketplace']) <div style="margin-top:2px">{!! $chBadge($row['marketplace']) !!}</div> @endif
+                        </td>
+                        @for ($m = 1; $m <= 12; $m++)
+                            @php [$txt, $clr] = $cellTxt($row['bulan'][$m]); $klik = (int) $row['bulan'][$m]['jml'] > 0; @endphp
+                            <td style="{{ $td }};text-align:right;color:{{ $clr }};{{ $klik ? 'cursor:pointer' : '' }}"
+                                @if ($klik) onclick="window.location='{{ $urlCell($row['store_id'], $m) }}'" title="{{ $namaBulan[$m] }} {{ $tahun }} — {{ $row['nama'] }}" @endif>{{ $txt }}</td>
+                        @endfor
+                        @php [$ttxt, $tclr] = $cellTxt($row['total']); @endphp
+                        <td style="{{ $td }};text-align:right;font-weight:800;color:{{ $tclr }};border-left:1px solid #e8edf3">{{ $ttxt }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="14" style="{{ $td }};text-align:center;color:#94a3b8">Belum ada pesanan untuk {{ $tahun }}.</td></tr>
+                @endforelse
+                </tbody>
+                @if (count($matriks) > 0)
+                <tfoot><tr style="font-weight:800">
+                    <td style="{{ $stickyTd }};border-top:2px solid #e8edf3">Total semua toko</td>
+                    @for ($m = 1; $m <= 12; $m++)
+                        @php [$ctxt, $cclr] = $cellTxt($colTot[$m]); @endphp
+                        <td style="{{ $td }};border-top:2px solid #e8edf3;text-align:right;color:{{ $cclr }}">{{ $ctxt }}</td>
+                    @endfor
+                    @php [$gtxt, $gclr] = $cellTxt($grand); @endphp
+                    <td style="{{ $td }};border-top:2px solid #e8edf3;text-align:right;color:{{ $gclr }};border-left:1px solid #e8edf3">{{ $gtxt }}</td>
+                </tr></tfoot>
+                @endif
+            </table>
+        </div>
+    </x-filament::section>
 
     {{-- Laporan bulanan (tahun terpilih) --}}
     <x-filament::section>
