@@ -26,6 +26,7 @@ class RiwayatPerubahan extends Page
         [
             'date' => '25 Juni 2026',
             'changes' => [
+                'Impor BEBAS URUTAN (ditegaskan): unggah Dropship atau Daftar Produk SEBELUM Laporan Marketplace pun aman — datanya tersimpan permanen & otomatis terpasang saat pesanannya menyusul (begitu juga sebaliknya). Notifikasi dropship diperjelas: dulu seolah data hilang bila pesanan belum ada, padahal biayanya tetap tersimpan.',
                 'Perbaikan: angka "Tarif efektif rata-rata" di halaman Pengaturan kini SAMA PERSIS dengan yang muncul di notifikasi setelah kalibrasi (dulu sedikit berbeda karena halaman memakai rata-rata kategori sederhana, sedangkan notifikasi memakai tarif efektif tertimbang-omzet dari Laporan Penghasilan — kini keduanya pakai sumber yang sama).',
                 'BARU — Laporan per Toko: di menu Laporan, lihat omzet, laba, dan margin SETIAP toko untuk tahun terpilih (channel ditampilkan); klik baris toko untuk membuka pesanannya.',
                 'Filter Toko di halaman Pesanan kini menampilkan channel tiap toko (nama toko diikuti "— Shopee" atau "— Tokopedia/TikTok") agar tak tertukar saat memilih.',

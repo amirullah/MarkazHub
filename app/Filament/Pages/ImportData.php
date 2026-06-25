@@ -128,7 +128,7 @@ class ImportData extends Page
             ->color('primary')
             ->extraAttributes(['class' => 'justify-center', 'style' => 'min-width:16rem'])
             ->modalHeading('Impor biaya dropship (per pesanan)')
-            ->modalDescription('Biaya Dropship = TOTAL yang Anda bayar ke supplier untuk pesanan itu (sudah termasuk harga produk + ongkir/biaya) — bukan hanya selisih/biayanya. Kolom Modal Produk (harga produk saja) opsional.')
+            ->modalDescription('Biaya Dropship = TOTAL yang Anda bayar ke supplier untuk pesanan itu (sudah termasuk harga produk + ongkir/biaya) — bukan hanya selisih/biayanya. Kolom Modal Produk (harga produk saja) opsional. Urutan impor BEBAS: bila pesanannya belum ada, biayanya tetap tersimpan & otomatis terpasang saat pesanan itu diimpor.')
             ->modalSubmitActionLabel('Impor dropship')
             ->schema([
                 FileUpload::make('file')
@@ -287,17 +287,17 @@ class ImportData extends Page
         \App\Support\DashboardCache::forget((int) auth()->user()->organization_id); // biaya dropship berubah → dashboard segar
 
         $lines = [
-            "✅ {$res['updated']} pesanan ditandai dropship & biayanya terisi.",
-            "{$res['rows']} baris dibaca, {$res['matched']} cocok dengan pesanan di sistem.",
+            "✅ {$res['rows']} baris biaya dropship TERSIMPAN permanen.",
+            "{$res['matched']} cocok dengan pesanan yang sudah ada — {$res['updated']} pesanan ditandai dropship & biayanya terisi.",
         ];
         if ($res['notfound']) {
-            $lines[] = "{$res['notfound']} No. Pesanan tidak ditemukan — pastikan pesanannya sudah diimpor lewat \"Laporan Marketplace\" lebih dulu.";
+            $lines[] = "ℹ️ {$res['notfound']} No. Pesanan belum ada pesanannya — biayanya TETAP TERSIMPAN dan otomatis terpasang begitu pesanan itu diimpor lewat \"Laporan Marketplace\". Urutan impor bebas.";
         }
         if (($res['updated'] ?? 0) === 0 && ($res['matched'] ?? 0) > 0) {
             $lines[] = 'Semua pesanan yang cocok sudah sesuai (tidak ada perubahan).';
         }
 
-        $this->notify('Biaya dropship berhasil diimpor', $lines, ($res['notfound'] ?? 0) > 0 ? 'warning' : 'success');
+        $this->notify('Biaya dropship berhasil diimpor', $lines, 'success');
     }
 
     /** Kirim notifikasi (toast + lonceng) dgn body multi-baris yg jelas. */
