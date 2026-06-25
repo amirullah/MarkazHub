@@ -36,15 +36,54 @@ class Insight extends Page
             ->orderByRaw("($profit) asc")
             ->limit(25)->get();
 
-        // Produk dijual DI BAWAH MODAL + total kerugiannya.
-        $bawahModal = OrderItem::query()
-            ->whereColumn('unit_price', '<', 'unit_cost')
-            ->where('unit_cost', '>', 0)->where('unit_price', '>', 0)
-            ->whereNotNull('sku')
-            ->selectRaw('sku, MAX(name) AS name, SUM(qty) AS qty_terjual, ROUND(AVG(unit_price)) AS avg_jual, ROUND(AVG(unit_cost)) AS avg_modal, ROUND(SUM((unit_cost - unit_price) * qty)) AS total_rugi')
-            ->groupBy('sku')
-            ->orderByDesc('total_rugi')
-            ->limit(20)->get();
+        // Produk yang HARGA JUAL-nya masih DI BAWAH MODAL — pakai data TERKINI (bukan modal beku):
+        // ambil pesanan TERBARU tiap produk → harga jual terkini vs modal terkini (modal katalog
+        // untuk packing sendiri, biaya dropship pesanan terbaru untuk dropship). Jadi bila harga
+        // sudah dinaikkan ATAU modal sudah turun, produk OTOMATIS hilang dari daftar.
+        $orgId = (int) auth()->user()->organization_id;
+        $catCost = Product::query()->pluck('cost_price', 'sku')->all();
+        // Ambil semua penjualan (urut terbaru dulu), lalu pakai BARIS PERTAMA tiap SKU =
+        // pesanan terbaru (tanpa window function, aman di MySQL versi lama).
+        $rows = DB::table('order_items as i')
+            ->join('orders as o', 'o.id', '=', 'i.order_id')
+            ->where('o.organization_id', $orgId)
+            ->whereNotIn('o.status', ['CANCELLED', 'RETURNED'])
+            ->where('o.product_revenue', '>', 0)
+            ->whereNotNull('i.sku')->where('i.sku', '!=', '')
+            ->orderByDesc('o.order_date')->orderByDesc('o.id')
+            ->get(['i.order_id', 'i.sku', 'i.name', 'i.unit_price', 'i.qty', 'o.fulfillment', 'o.dropship_cost', 'o.order_date']);
+        // Total qty & jumlah jenis produk per pesanan (biaya dropship = level pesanan).
+        $ordQty = [];
+        $ordSku = [];
+        foreach ($rows as $r) {
+            $ordQty[$r->order_id] = ($ordQty[$r->order_id] ?? 0) + (int) $r->qty;
+            $ordSku[$r->order_id][$r->sku] = true;
+        }
+        $seen = [];
+        $bawahModal = collect();
+        foreach ($rows as $r) {
+            if (isset($seen[$r->sku])) {
+                continue; // sudah diambil yang terbaru utk SKU ini
+            }
+            $seen[$r->sku] = true;
+            $jual = (float) $r->unit_price;
+            if ($r->fulfillment === 'DROPSHIP') {
+                // Biaya dropship per-unit hanya bisa diatribusi bila pesanan 1 JENIS produk.
+                if (count($ordSku[$r->order_id]) !== 1) {
+                    continue;
+                }
+                $modal = (float) $r->dropship_cost / max($ordQty[$r->order_id], 1);
+            } else {
+                $modal = (float) ($catCost[$r->sku] ?? 0); // modal katalog TERKINI
+            }
+            if ($modal > 0 && $jual > 0 && $jual < $modal) {
+                $bawahModal->push((object) [
+                    'sku' => $r->sku, 'name' => (string) $r->name, 'jual' => $jual, 'modal' => $modal,
+                    'selisih' => $modal - $jual, 'fulfillment' => $r->fulfillment, 'tgl' => (string) $r->order_date,
+                ]);
+            }
+        }
+        $bawahModal = $bawahModal->sortByDesc('selisih')->values()->take(25);
 
         // Produk PALING UNTUNG (margin × qty), pesanan selesai.
         $palingUntung = OrderItem::query()

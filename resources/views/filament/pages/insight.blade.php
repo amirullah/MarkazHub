@@ -82,27 +82,27 @@
     {{-- Produk Merugi (klik untuk detail) --}}
     <div id="produk-merugi" style="scroll-margin-top:5rem"></div>
     <x-filament::section>
-        <x-slot name="heading">{!! $hicon($pDown, '#dc2626') !!}Produk Merugi — dijual di bawah modal</x-slot>
-        <x-slot name="description">Diurutkan dari kerugian terbesar. Klik baris untuk lihat detail produk.</x-slot>
+        <x-slot name="heading">{!! $hicon($pDown, '#dc2626') !!}Produk Masih Dijual di Bawah Modal (harga &amp; modal TERKINI)</x-slot>
+        <x-slot name="description">Pakai harga jual &amp; modal TERBARU tiap produk (modal katalog untuk packing sendiri, biaya dropship terbaru untuk dropship). Kalau harga sudah dinaikkan atau modal sudah turun, produk otomatis HILANG dari sini. Klik baris untuk detail.</x-slot>
         <div style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse">
                 <thead><tr>
-                    <th style="{{ $th }}">SKU</th><th style="{{ $th }}">Produk</th>
-                    <th style="{{ $th }};text-align:right">Avg Jual</th><th style="{{ $th }};text-align:right">Avg Modal</th>
-                    <th style="{{ $th }};text-align:right">Qty</th><th style="{{ $th }};text-align:right">Total Rugi</th>
+                    <th style="{{ $th }}">SKU</th><th style="{{ $th }}">Produk</th><th style="{{ $th }}">Jenis</th>
+                    <th style="{{ $th }};text-align:right">Harga Jual Terkini</th><th style="{{ $th }};text-align:right">Modal Terkini</th>
+                    <th style="{{ $th }};text-align:right">Rugi / pcs</th>
                 </tr></thead>
                 <tbody>
                 @forelse ($bawahModal as $b)
                     <tr wire:click="showDetail(@js($b->sku))" style="cursor:pointer" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
                         <td style="{{ $td }};font-family:monospace;font-size:.75rem">{{ $b->sku }}</td>
-                        <td style="{{ $td }}">{{ \Illuminate\Support\Str::limit($b->name, 40) }}</td>
-                        <td style="{{ $td }};text-align:right">{{ $rp($b->avg_jual) }}</td>
-                        <td style="{{ $td }};text-align:right">{{ $rp($b->avg_modal) }}</td>
-                        <td style="{{ $td }};text-align:right;color:#64748b">{{ number_format($b->qty_terjual, 0, ',', '.') }}</td>
-                        <td style="{{ $td }};text-align:right;color:#dc2626;font-weight:700">{{ $rp($b->total_rugi) }}</td>
+                        <td style="{{ $td }}">{{ \Illuminate\Support\Str::limit($b->name, 38) }}</td>
+                        <td style="{{ $td }};font-size:.78rem;color:#64748b">{{ $b->fulfillment === 'DROPSHIP' ? 'Dropship' : 'Packing sendiri' }}</td>
+                        <td style="{{ $td }};text-align:right">{{ $rp($b->jual) }}</td>
+                        <td style="{{ $td }};text-align:right">{{ $rp($b->modal) }}</td>
+                        <td style="{{ $td }};text-align:right;color:#dc2626;font-weight:700">{{ $rp($b->selisih) }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" style="{{ $td }};text-align:center;color:#94a3b8">Tidak ada produk dijual di bawah modal. 👍</td></tr>
+                    <tr><td colspan="6" style="{{ $td }};text-align:center;color:#94a3b8">Tidak ada produk yang harga jualnya masih di bawah modal SEKARANG. 👍</td></tr>
                 @endforelse
                 </tbody>
             </table>
