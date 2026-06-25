@@ -83,6 +83,14 @@ class Order extends Model
             $gaps[] = 'Biaya dropship belum ada (impor Dropship)';
         }
 
+        // Settlement (uang bersih marketplace) belum cair: laporan MEMUAT pesanan ini tapi
+        // penghasilannya masih 0 (mis. baru selesai, dana TikTok/Tokopedia ditahan dulu) →
+        // laba belum final sampai dana keluar (impor ulang Laporan Penghasilan nanti).
+        if ($this->income_verified && (float) $this->product_revenue > 0
+            && app(ProfitService::class)->net($this) <= 0) {
+            $gaps[] = 'Settlement belum cair dari marketplace — impor ulang Laporan Penghasilan setelah dana keluar';
+        }
+
         return $gaps;
     }
 
@@ -103,7 +111,9 @@ class Order extends Model
             ->where(function ($q) {
                 $q->where('income_verified', false)
                     ->orWhere(fn ($q) => $q->where('fulfillment', 'SELF')->where('product_revenue', '>', 0)->where('cogs', '<=', 0))
-                    ->orWhere(fn ($q) => $q->where('fulfillment', 'DROPSHIP')->where('dropship_cost', '<=', 0));
+                    ->orWhere(fn ($q) => $q->where('fulfillment', 'DROPSHIP')->where('dropship_cost', '<=', 0))
+                    // Selesai/verified tapi settlement belum cair (net <= 0).
+                    ->orWhere(fn ($q) => $q->where('income_verified', true)->where('product_revenue', '>', 0)->whereRaw(ProfitService::SQL_NET . ' <= 0'));
             });
     }
 

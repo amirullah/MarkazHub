@@ -182,7 +182,7 @@ class OrdersTable
                     ->schema([
                         ToggleButtons::make('value')->label('Status Laba')->hiddenLabel()
                             ->inline()
-                            ->options(['semua' => 'Semua status laba', 'final' => 'Final', 'belum_final' => 'Belum final', 'laba_semu' => 'Laba semu (HPP kosong)', 'perlu_data' => 'Perlu data (HPP/dropship)', 'estimasi' => 'Estimasi'])->default('semua'),
+                            ->options(['semua' => 'Semua status laba', 'final' => 'Final', 'belum_final' => 'Belum final', 'belum_cair' => 'Belum cair (settlement)', 'laba_semu' => 'Laba semu (HPP kosong)', 'perlu_data' => 'Perlu data (HPP/dropship)', 'estimasi' => 'Estimasi'])->default('semua'),
                     ])
                     ->query(fn (Builder $query, array $data): Builder => $query->when(
                         ($v = $data['value'] ?? null) && $v !== 'semua',
@@ -303,7 +303,12 @@ class OrdersTable
         if (empty($gaps)) {
             return $record->lacksItemDetail() ? 'Final*' : 'Final';
         }
-        $dataGaps = array_filter($gaps, fn (string $g): bool => ! str_contains($g, 'ESTIMASI'));
+        // Hanya menunggu pencairan settlement (data lain lengkap) → status khusus "Belum cair".
+        $nonSettlement = array_filter($gaps, fn (string $g): bool => ! str_contains($g, 'Settlement'));
+        if (empty($nonSettlement)) {
+            return 'Belum cair';
+        }
+        $dataGaps = array_filter($nonSettlement, fn (string $g): bool => ! str_contains($g, 'ESTIMASI'));
 
         return $dataGaps ? 'Perlu data' : 'Estimasi';
     }
@@ -314,6 +319,7 @@ class OrdersTable
         return match ($state) {
             'Final', 'Final*' => 'success',
             'Perlu data' => 'warning',
+            'Belum cair' => 'info',
             default => 'gray', // 'Estimasi' & '—' (batal/retur)
         };
     }
@@ -325,6 +331,7 @@ class OrdersTable
             'Final' => 'heroicon-m-check-circle',
             'Final*' => 'heroicon-m-information-circle',
             'Perlu data' => 'heroicon-m-exclamation-triangle',
+            'Belum cair' => 'heroicon-m-banknotes',
             'Estimasi' => 'heroicon-m-clock',
             default => null, // '—' tanpa ikon
         };
@@ -414,16 +421,21 @@ class OrdersTable
             $q->where(fn (Builder $q) => $q->where('fulfillment', 'SELF')->where('product_revenue', '>', 0)->where('cogs', '<=', 0))
                 ->orWhere(fn (Builder $q) => $q->where('fulfillment', 'DROPSHIP')->where('dropship_cost', '<=', 0));
         };
+        // Selesai/verified tapi settlement belum cair (net <= 0) → "Belum cair".
+        $belumCair = function (Builder $q): void {
+            $q->where('income_verified', true)->where('product_revenue', '>', 0)->whereRaw(ProfitService::SQL_NET . ' <= 0');
+        };
         $aktif = fn (Builder $q): Builder => $q->whereNotIn('status', ['CANCELLED', 'RETURNED']);
 
         return match ($v) {
-            // "Final" MENCAKUP Final & Final* (final tanpa rincian item) — sesuai kolom statusLaba().
-            'final' => $aktif($q)->where('income_verified', true)->whereNot($dataGap),
+            // "Final" MENCAKUP Final & Final* — verified, data lengkap, & settlement sudah cair.
+            'final' => $aktif($q)->where('income_verified', true)->whereNot($dataGap)->whereNot($belumCair),
             'laba_semu' => $q->labaSemu(), // SELF, omzet>0, HPP kosong (cocok kartu "Laba Semu")
             'perlu_data' => $aktif($q)->where($dataGap),
+            'belum_cair' => $aktif($q)->where($belumCair),
             'estimasi' => $aktif($q)->where('income_verified', false)->whereNot($dataGap),
-            // "Belum final" = gabungan perlu_data + estimasi (laba belum pasti).
-            'belum_final' => $aktif($q)->where(fn (Builder $q) => $q->where($dataGap)->orWhere('income_verified', false)),
+            // "Belum final" = gabungan perlu_data + estimasi + belum_cair (laba belum pasti).
+            'belum_final' => $aktif($q)->where(fn (Builder $q) => $q->where($dataGap)->orWhere('income_verified', false)->orWhere($belumCair)),
             default => $q,
         };
     }

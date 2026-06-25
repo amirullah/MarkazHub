@@ -26,6 +26,7 @@ class RiwayatPerubahan extends Page
         [
             'date' => '25 Juni 2026',
             'changes' => [
+                'Perbaikan laba (settlement belum cair): pesanan "Selesai" yang dananya BELUM cair dari marketplace (settlement masih 0 di laporan, mis. baru selesai & dana TikTok/Tokopedia ditahan dulu) kini berstatus "Belum cair" — TIDAK lagi keliru ditandai "Final" dan tidak tampil rugi palsu (laba pending Rp 0). Begitu dana cair & Anda impor ulang Laporan Penghasilan, labanya jadi final & benar.',
                 'Perbaikan laba dropship: pesanan dropship yang masih "Dibayar" (belum selesai/dicairkan marketplace) TIDAK lagi tampil sebagai rugi palsu. Selama omzet belum keluar, labanya dianggap PENDING (Rp 0) — biaya dropship baru dihitung saat pesanan selesai & omzet masuk. Total Laba jadi lebih akurat (tak terseret pesanan yang belum tuntas).',
                 'Perbaikan PENTING: setelah impor Laporan Marketplace, estimasi biaya admin & laba kini LANGSUNG terhitung otomatis — tak perlu lagi menekan tombol "Isi Estimasi Biaya Admin" manual. (Dulu pesanan baru biayanya 0 sampai tombol itu ditekan, sehingga laba terlihat "belum dihitung".)',
                 'Laporan per Toko kini bisa dilihat PER BULAN: pilih bulan (atau "Setahun") di bagian Laporan per Toko untuk melihat omzet/laba tiap toko pada bulan itu.',

@@ -13,24 +13,25 @@ namespace App\Services;
  *   net    = (product_revenue + other_income)
  *          - (admin_fee + shipping_cost_seller + voucher_seller_borne + other_cost)   // sebelum modal
  *
- * PENGECUALIAN PENDING: bila revenue (product_revenue + other_income) = 0 → profit & net = 0.
- * Pesanan belum tuntas/dicairkan (mis. dropship status "Dibayar": biaya dropship sudah terisi
- * tapi omzet belum keluar dari marketplace) BUKAN rugi — labanya PENDING sampai omzet masuk.
- * (Pesanan batal/retur sudah dinolkan saat impor, jadi tidak terdampak.)
+ * PENGECUALIAN PENDING (settlement belum cair): bila NET (uang bersih marketplace) <= 0, HPP &
+ * biaya dropship BELUM direalisasi → profit = net. Jadi 0 saat belum ada omzet (dropship
+ * "Dibayar") ATAU saat pesanan "Selesai" tapi dananya belum cair (settlement 0 di laporan).
+ * HPP/dropship baru dihitung saat dana cair (net > 0). Retur (net<0, cogs=0) tetap rugi nyata;
+ * pesanan batal sudah dinolkan saat impor.
  *
  * Menerima array kolom finansial ATAU model Order (apa pun yang ArrayAccess-able).
  */
 class ProfitService
 {
+    /** Ekspresi SQL net (settlement/uang bersih marketplace sebelum modal); 0 bila belum ada omzet. */
+    public const SQL_NET = '(CASE WHEN (product_revenue + other_income) > 0 THEN (product_revenue + other_income - (admin_fee + shipping_cost_seller + voucher_seller_borne + other_cost)) ELSE 0 END)';
+
     /**
      * Ekspresi SQL laba — HARUS identik dengan profit(). Dipakai untuk sort/agregat
-     * (orderByRaw/whereRaw/selectRaw) agar formula TIDAK diketik ulang di banyak tempat
-     * (cegah divergensi dari sumber kebenaran).
+     * (orderByRaw/whereRaw/selectRaw). Bila settlement (net) <= 0 → HPP/dropship belum
+     * direalisasi → laba = net (pending); selain itu net − HPP − dropship.
      */
-    public const SQL_PROFIT = '(CASE WHEN (product_revenue + other_income) > 0 THEN (product_revenue + other_income - (cogs + admin_fee + shipping_cost_seller + voucher_seller_borne + dropship_cost + other_cost)) ELSE 0 END)';
-
-    /** Ekspresi SQL net (laba sebelum modal). */
-    public const SQL_NET = '(CASE WHEN (product_revenue + other_income) > 0 THEN (product_revenue + other_income - (admin_fee + shipping_cost_seller + voucher_seller_borne + other_cost)) ELSE 0 END)';
+    public const SQL_PROFIT = '(CASE WHEN ' . self::SQL_NET . ' <= 0 THEN ' . self::SQL_NET . ' ELSE (' . self::SQL_NET . ' - cogs - dropship_cost) END)';
 
     /**
      * Ekspresi SQL biaya dropship aktif sesuai toggle Dropship:
@@ -52,8 +53,10 @@ class ProfitService
      */
     public static function sqlProfit(): string
     {
-        return '(CASE WHEN (product_revenue + other_income) > 0 THEN (product_revenue + other_income - (cogs + admin_fee + shipping_cost_seller + voucher_seller_borne + '
-            . self::dropshipExpr() . ' + other_cost)) ELSE 0 END)';
+        $net = self::SQL_NET; // settlement (ter-gate: 0 bila belum ada omzet)
+        // Settlement belum cair (net<=0) → laba = net (HPP/dropship belum direalisasi);
+        // selain itu net − HPP − biaya dropship (mengikuti toggle Dropship).
+        return '(CASE WHEN ' . $net . ' <= 0 THEN ' . $net . ' ELSE (' . $net . ' - cogs - ' . self::dropshipExpr() . ') END)';
     }
 
     /** Biaya dropship efektif (PHP) sesuai toggle Dropship, dgn fallback aman. */
@@ -69,12 +72,15 @@ class ProfitService
     /** Laba bersih per pesanan (setelah modal). */
     public function profit(array|object $o): float
     {
-        // Tanpa revenue (belum tuntas/dicairkan — mis. dropship "Dibayar") = PENDING, bukan rugi.
-        if ($this->revenue($o) <= 0) {
-            return 0.0;
+        // Laba = settlement (net) − HPP − biaya dropship. Bila settlement BELUM cair (net <= 0),
+        // HPP/dropship belum terealisasi → laba = net (PENDING; 0 bila belum ada omzet, atau rugi
+        // nyata pada retur yg cogs=0). HPP/dropship baru dihitung saat dana cair (net > 0).
+        $net = $this->net($o);
+        if ($net <= 0) {
+            return $net;
         }
 
-        return round($this->revenue($o) - $this->totalCost($o), 2);
+        return round($net - $this->f($o, 'cogs') - $this->effectiveDropship($o), 2);
     }
 
     /** Uang bersih marketplace (laba sebelum modal). Harus == settlement utk pesanan verified. */
