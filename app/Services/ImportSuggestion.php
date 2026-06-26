@@ -74,7 +74,7 @@ class ImportSuggestion
                 'sampai' => self::fmt($r->sampai),
                 'count' => (int) $r->c,
                 'note' => 'biaya admin/komisi masih estimasi — laba belum final',
-                'filters' => self::ff(['status_laba' => ['value' => 'estimasi']], $r->store_id),
+                'filters' => self::ff(['saran' => ['value' => 'income']], $r->store_id),
             ];
         }
 
@@ -90,7 +90,7 @@ class ImportSuggestion
                 'sampai' => self::fmt($r->sampai),
                 'count' => (int) $r->c,
                 'note' => 'rincian produk/SKU/qty belum tercatat',
-                'filters' => self::ff(['status_laba' => ['value' => 'perlu_data']], $r->store_id),
+                'filters' => self::ff(['saran' => ['value' => 'no_item']], $r->store_id),
             ];
         }
 
@@ -109,9 +109,7 @@ class ImportSuggestion
                 'sampai' => self::fmt($r->sampai),
                 'count' => (int) $r->c,
                 'note' => 'produk sudah tercatat tapi modal/HPP-nya belum ada di Daftar Produk',
-                // Tanpa link: subset "punya item TAPI modal kosong" tak ada padanan filter tabel
-                // (filter "laba semu" mencakup juga yang tanpa-item, jadi jumlahnya tak cocok).
-                'filters' => [],
+                'filters' => ['saran' => ['value' => 'hpp']],
             ];
         }
 
@@ -128,7 +126,7 @@ class ImportSuggestion
                     'sampai' => self::fmt($r->sampai),
                     'count' => (int) $r->c,
                     'note' => 'biaya dropship per pesanan belum terisi',
-                    'filters' => ['status_laba' => ['value' => 'perlu_data']], // dropship tanpa biaya = bagian "perlu data"
+                    'filters' => ['saran' => ['value' => 'dropship_cost']],
                 ];
             }
 
@@ -151,8 +149,7 @@ class ImportSuggestion
                         'sampai' => self::fmt($r->sampai),
                         'count' => (int) $r->c,
                         'note' => 'toko dropship tapi ada pesanan packing-sendiri yang belum ada data dropship — upload file Dropship periode ini',
-                        // Link tampilkan pesanan packing-sendiri toko ini (kategori yg dimaksud).
-                        'filters' => self::ff(['fulfillment' => ['value' => 'SELF']], $store->id),
+                        'filters' => self::ff(['saran' => ['value' => 'dropship']], $store->id),
                     ];
                 }
             }

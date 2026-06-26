@@ -286,6 +286,40 @@ class OrdersTable
                     ))
                     ->indicateUsing(fn (array $data): ?string => ($v = $data['value'] ?? null)
                         ? 'Periode: ' . $v : null),
+                // Pintasan SARAN IMPOR (tersembunyi) — dipakai link "Lihat pesanan" di panel "File yang
+                // perlu diupload". Query MENIRU PERSIS App\Services\ImportSuggestion agar JUMLAHNYA COCOK.
+                Filter::make('saran')
+                    ->schema([
+                        \Filament\Forms\Components\Hidden::make('value'),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => $query->when(
+                        $data['value'] ?? null,
+                        function (Builder $q, $v): Builder {
+                            $q->whereNotIn('status', ['CANCELLED', 'RETURNED']);
+                            $noDropship = fn (Builder $q): Builder => $q->whereNotExists(function ($s): void {
+                                $s->selectRaw('1')->from('dropship_costs as dc')
+                                    ->whereColumn('dc.external_no', 'orders.external_no')
+                                    ->whereColumn('dc.organization_id', 'orders.organization_id');
+                            });
+
+                            return match ($v) {
+                                'income' => $q->where('income_verified', false),
+                                'no_item' => $q->doesntHave('items'),
+                                'hpp' => $q->where('fulfillment', 'SELF')->where('product_revenue', '>', 0)->where('cogs', '<=', 0)->has('items'),
+                                'dropship' => $noDropship($q->where('fulfillment', 'SELF')->whereHas('store', fn ($s) => $s->where('fulfillment_mode', 'dropship'))),
+                                'dropship_cost' => $q->where('fulfillment', 'DROPSHIP')->where('dropship_cost', '<=', 0),
+                                default => $q,
+                            };
+                        },
+                    ))
+                    ->indicateUsing(fn (array $data): ?string => match ($data['value'] ?? null) {
+                        'income' => 'Butuh Laporan Penghasilan (biaya estimasi)',
+                        'no_item' => 'Belum ada rincian item (File Pesanan)',
+                        'hpp' => 'Modal/HPP belum ada (produk sudah tercatat)',
+                        'dropship' => 'Belum ada data dropship',
+                        'dropship_cost' => 'Biaya dropship belum terisi',
+                        default => null,
+                    }),
             ])
             // Filter tampil DI ATAS tabel (tak menutup data), ringkas & padat (sampai 4 kolom),
             // berlaku seketika. AboveContent agar user langsung lihat filter tersedia.

@@ -26,6 +26,7 @@ class RiwayatPerubahan extends Page
         [
             'date' => '26 Juni 2026',
             'changes' => [
+                'Link "Lihat pesanan" di panel "File yang perlu diupload" kini menampilkan pesanan PERSIS sesuai jumlah di tiap baris (sebelumnya bisa beda karena pakai filter perkiraan). Caranya: filter tersembunyi "saran" yang meniru query tepat tiap kategori (income belum diverifikasi / tanpa rincian item / HPP kosong tapi produk ada / kurang data dropship). Butir "Daftar Produk (HPP)" pun kini punya link.',
                 'Laba pesanan yang "belum final" (HPP/modal belum ada, biaya masih estimasi, atau settlement belum cair) kini tampil sebagai ESTIMASI — angka abu-abu + awalan "≈", dan di detail diberi label "belum final" — supaya tidak terkesan untung pasti. Pesanan yang sudah final tetap hijau (untung) / merah (rugi) seperti biasa. Berlaku di tabel Pesanan & halaman detail.',
             ],
         ],
