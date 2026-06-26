@@ -16,6 +16,7 @@
         @php
             $saranImpor = app(\App\Services\ImportSuggestion::class)->compute();
             $adaPesanan = \App\Models\Order::query()->exists();
+            $ordersUrl = \App\Filament\Resources\Orders\OrderResource::getUrl('index');
         @endphp
         @if (count($saranImpor))
             <div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:.85rem;padding:1rem 1.2rem">
@@ -31,7 +32,11 @@
                             <span style="font-size:.64rem;font-weight:700;padding:2px 8px;border-radius:6px;background:{{ $bg }};color:{{ $fg }};white-space:nowrap">{{ $lbl }}</span>
                             <div style="flex:1;min-width:0">
                                 <div style="font-weight:600;color:#1e293b;font-size:.88rem">{{ $s['file'] }}</div>
-                                <div style="font-size:.76rem;color:#64748b">{{ number_format($s['count'], 0, ',', '.') }} pesanan · {{ $s['note'] }} · unggah via <strong>{{ $s['via'] }}</strong></div>
+                                <div style="font-size:.76rem;color:#64748b">{{ number_format($s['count'], 0, ',', '.') }} pesanan · {{ $s['note'] }} · unggah via <strong>{{ $s['via'] }}</strong>
+                                    @if (!empty($s['filters']))
+                                        · <a href="{{ $ordersUrl . '?' . http_build_query(['filters' => $s['filters']]) }}" style="color:#2563eb;font-weight:600;text-decoration:none;white-space:nowrap">Lihat pesanan →</a>
+                                    @endif
+                                </div>
                             </div>
                             <div style="text-align:right;white-space:nowrap">
                                 <div style="font-size:.66rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.03em">periode</div>

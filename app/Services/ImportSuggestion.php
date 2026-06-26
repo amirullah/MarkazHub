@@ -30,6 +30,16 @@ class ImportSuggestion
         return $d ? Carbon::parse($d)->translatedFormat('d M Y') : '—';
     }
 
+    /** Param filter URL tabel Pesanan: filter tambahan + (opsional) store_id (bentuk values[]). */
+    private static function ff(array $extra, $storeId = null): array
+    {
+        if ($storeId) {
+            $extra['store_id'] = ['values' => [(int) $storeId]];
+        }
+
+        return $extra;
+    }
+
     /** Query dasar: pesanan aktif (batal/retur dikecualikan — terminal, bukan "kurang data"). */
     private static function base()
     {
@@ -37,7 +47,7 @@ class ImportSuggestion
     }
 
     /**
-     * @return array<int, array{urgency:string,file:string,via:string,dari:string,sampai:string,count:int,note:string}>
+     * @return array<int, array{urgency:string,file:string,via:string,dari:string,sampai:string,count:int,note:string,filters:array}>
      */
     public function compute(): array
     {
@@ -64,6 +74,7 @@ class ImportSuggestion
                 'sampai' => self::fmt($r->sampai),
                 'count' => (int) $r->c,
                 'note' => 'biaya admin/komisi masih estimasi — laba belum final',
+                'filters' => self::ff(['status_laba' => ['value' => 'estimasi']], $r->store_id),
             ];
         }
 
@@ -79,6 +90,7 @@ class ImportSuggestion
                 'sampai' => self::fmt($r->sampai),
                 'count' => (int) $r->c,
                 'note' => 'rincian produk/SKU/qty belum tercatat',
+                'filters' => self::ff(['status_laba' => ['value' => 'perlu_data']], $r->store_id),
             ];
         }
 
@@ -97,6 +109,9 @@ class ImportSuggestion
                 'sampai' => self::fmt($r->sampai),
                 'count' => (int) $r->c,
                 'note' => 'produk sudah tercatat tapi modal/HPP-nya belum ada di Daftar Produk',
+                // Tanpa link: subset "punya item TAPI modal kosong" tak ada padanan filter tabel
+                // (filter "laba semu" mencakup juga yang tanpa-item, jadi jumlahnya tak cocok).
+                'filters' => [],
             ];
         }
 
@@ -113,6 +128,7 @@ class ImportSuggestion
                     'sampai' => self::fmt($r->sampai),
                     'count' => (int) $r->c,
                     'note' => 'biaya dropship per pesanan belum terisi',
+                    'filters' => ['status_laba' => ['value' => 'perlu_data']], // dropship tanpa biaya = bagian "perlu data"
                 ];
             }
 
@@ -135,6 +151,8 @@ class ImportSuggestion
                         'sampai' => self::fmt($r->sampai),
                         'count' => (int) $r->c,
                         'note' => 'toko dropship tapi ada pesanan packing-sendiri yang belum ada data dropship — upload file Dropship periode ini',
+                        // Link tampilkan pesanan packing-sendiri toko ini (kategori yg dimaksud).
+                        'filters' => self::ff(['fulfillment' => ['value' => 'SELF']], $store->id),
                     ];
                 }
             }
