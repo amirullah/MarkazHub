@@ -76,9 +76,10 @@ class OrdersTable
                     )),
                 // 5. Laba (Rp).
                 TextColumn::make('profit')
-                    ->label('Laba')                    ->formatStateUsing(fn ($state): string => 'Rp ' . number_format((float) $state, 0, ',', '.'))
+                    ->label('Laba')                    ->formatStateUsing(fn ($state, \App\Models\Order $record): string => (! empty($record->incompleteness()) ? '≈ ' : '') . 'Rp ' . number_format((float) $state, 0, ',', '.'))
                     ->weight('bold')
-                    ->color(fn ($state): string => (float) $state < 0 ? 'danger' : 'success')
+                    // Belum final (HPP/dropship/estimasi/settlement) → abu-abu + "≈": jangan terlihat laba pasti.
+                    ->color(fn ($state, \App\Models\Order $record): string => ! empty($record->incompleteness()) ? 'gray' : ((float) $state < 0 ? 'danger' : 'success'))
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw(
                         ProfitService::sqlProfit() . ' ' . $direction
                     ))

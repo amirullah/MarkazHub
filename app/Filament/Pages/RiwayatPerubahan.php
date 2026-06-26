@@ -24,6 +24,12 @@ class RiwayatPerubahan extends Page
      */
     public const CHANGELOG = [
         [
+            'date' => '26 Juni 2026',
+            'changes' => [
+                'Laba pesanan yang "belum final" (HPP/modal belum ada, biaya masih estimasi, atau settlement belum cair) kini tampil sebagai ESTIMASI — angka abu-abu + awalan "≈", dan di detail diberi label "belum final" — supaya tidak terkesan untung pasti. Pesanan yang sudah final tetap hijau (untung) / merah (rugi) seperti biasa. Berlaku di tabel Pesanan & halaman detail.',
+            ],
+        ],
+        [
             'date' => '25 Juni 2026',
             'changes' => [
                 'Panel "File yang perlu segera diupload": tiap baris kini ada link "Lihat pesanan →" yang membuka daftar Pesanan TERFILTER (per toko + status terkait) — jadi bisa langsung cek pesanan yang dimaksud tiap butir. (Butir "Daftar Produk/HPP" tak diberi link karena subsetnya — produk sudah tercatat tapi modal kosong — tak punya padanan filter tabel yang persis.)',

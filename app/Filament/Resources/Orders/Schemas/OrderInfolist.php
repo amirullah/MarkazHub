@@ -130,10 +130,13 @@ class OrderInfolist
                         ->formatStateUsing(fn ($record): string => 'Rp ' . number_format((float) $record->product_revenue + (float) $record->other_income, 0, ',', '.')),
                     TextEntry::make('net')->label('Uang Bersih Marketplace')->inlineLabel()->formatStateUsing($rp),
                     TextEntry::make('profit')->label('Laba Bersih')->inlineLabel()
-                        ->formatStateUsing($rp)
+                        ->formatStateUsing(fn ($state, $record): string => (! empty($record->incompleteness()) ? '≈ ' : '') . 'Rp ' . number_format((float) $state, 0, ',', '.'))
                         ->weight('bold')
                         ->size('lg')
-                        ->color(fn ($state): string => (float) $state < 0 ? 'danger' : 'success'),
+                        // Belum final → abu-abu + hint "belum final" (jangan terkesan untung pasti).
+                        ->color(fn ($state, $record): string => ! empty($record->incompleteness()) ? 'gray' : ((float) $state < 0 ? 'danger' : 'success'))
+                        ->hint(fn ($record): ?string => ! empty($record->incompleteness()) ? 'belum final' : null)
+                        ->hintColor('warning'),
                     TextEntry::make('margin')->label('Margin')->inlineLabel()
                         ->state(function ($record): string {
                             $rev = (float) $record->product_revenue + (float) $record->other_income;
