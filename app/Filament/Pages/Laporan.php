@@ -53,7 +53,7 @@ class Laporan extends Page
 
     public function pilihMetrik(string $metrik): void
     {
-        $this->metrik = in_array($metrik, ['laba', 'omzet', 'jml'], true) ? $metrik : 'laba';
+        $this->metrik = in_array($metrik, ['laba', 'omzet', 'jml', 'biaya'], true) ? $metrik : 'laba';
     }
 
     /** Klik judul kolom: kolom sama → balik arah; kolom beda → set kolom (default desc, nama asc). */
@@ -132,19 +132,22 @@ class Laporan extends Page
         }
         $colTot = [];
         for ($m = 1; $m <= 12; $m++) {
-            $colTot[$m] = ['omzet' => 0.0, 'laba' => 0.0, 'jml' => 0];
+            $colTot[$m] = ['omzet' => 0.0, 'laba' => 0.0, 'jml' => 0, 'biaya' => 0.0];
         }
-        $grand = ['omzet' => 0.0, 'laba' => 0.0, 'jml' => 0];
+        $grand = ['omzet' => 0.0, 'laba' => 0.0, 'jml' => 0, 'biaya' => 0.0];
         $matriks = [];
         foreach ($byStore as $sid => $months) {
             $s = $sid ? $stores->get($sid) : null;
             $bulanCells = [];
-            $rowTot = ['omzet' => 0.0, 'laba' => 0.0, 'jml' => 0];
+            $rowTot = ['omzet' => 0.0, 'laba' => 0.0, 'jml' => 0, 'biaya' => 0.0];
             for ($m = 1; $m <= 12; $m++) {
                 $rr = $months[$m] ?? null;
-                $cell = ['omzet' => (float) ($rr->omzet ?? 0), 'laba' => (float) ($rr->laba ?? 0), 'jml' => (int) ($rr->jml ?? 0)];
+                $omz = (float) ($rr->omzet ?? 0);
+                $lb = (float) ($rr->laba ?? 0);
+                // Biaya = Omzet − Laba (total semua pengurang: admin/komisi, ongkir, voucher, HPP/modal, dropship, lain).
+                $cell = ['omzet' => $omz, 'laba' => $lb, 'jml' => (int) ($rr->jml ?? 0), 'biaya' => $omz - $lb];
                 $bulanCells[$m] = $cell;
-                foreach (['omzet', 'laba', 'jml'] as $k) {
+                foreach (['omzet', 'laba', 'jml', 'biaya'] as $k) {
                     $rowTot[$k] += $cell[$k];
                     $colTot[$m][$k] += $cell[$k];
                     $grand[$k] += $cell[$k];

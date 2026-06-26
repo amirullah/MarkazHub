@@ -28,7 +28,7 @@
             'store_id' => $storeId ? ['values' => [$storeId]] : null,
             'bulan_tahun' => ['value' => sprintf('%04d-%02d', $tahun, $m)],
         ])]);
-        $metrikLabel = ['laba' => 'Laba', 'omzet' => 'Omzet', 'jml' => 'Pesanan'];
+        $metrikLabel = ['laba' => 'Laba', 'omzet' => 'Omzet', 'biaya' => 'Biaya', 'jml' => 'Pesanan'];
     @endphp
 
     {{-- Pemilih tahun --}}
@@ -61,7 +61,7 @@
                 if ((int) ($cell['jml'] ?? 0) === 0) return ['·', '#cbd5e1'];
                 if ($metrik === 'jml') return [number_format($cell['jml'], 0, ',', '.'), '#475569'];
                 $v = $cell[$metrik];
-                $color = $metrik === 'laba' ? ($v < 0 ? '#dc2626' : '#16a34a') : '#0f172a';
+                $color = $metrik === 'laba' ? ($v < 0 ? '#dc2626' : '#16a34a') : ($metrik === 'biaya' ? '#b45309' : '#0f172a');
                 return ['Rp ' . number_format($v, 0, ',', '.'), $color];
             };
             $panah = fn ($kol) => $urutKolom === (string) $kol ? ($urutArah === 'asc' ? ' ▲' : ' ▼') : '';
