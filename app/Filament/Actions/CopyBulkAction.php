@@ -17,6 +17,15 @@ class CopyBulkAction
      * @param  string|\Closure  $extract  Nama kolom (di-pluck) ATAU closure(Collection $records): iterable nilai.
      * @param  string|null  $emptyHint  Penjelasan saat tak ada nilai (mis. "impor File Pesanan dulu").
      */
+    /** JS salin ke clipboard (Clipboard API + fallback execCommand utk peramban lama). */
+    public static function clipboardJs(string $text): string
+    {
+        return '(function(t){try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t);}else{throw 0;}}'
+            . 'catch(e){var a=document.createElement("textarea");a.value=t;a.style.position="fixed";a.style.opacity="0";'
+            . 'document.body.appendChild(a);a.focus();a.select();try{document.execCommand("copy");}catch(_){}document.body.removeChild(a);}})('
+            . json_encode($text) . ')';
+    }
+
     public static function make(string $name, string $label, string|\Closure $extract, string $satuan, ?string $emptyHint = null): BulkAction
     {
         return BulkAction::make($name)
@@ -40,12 +49,7 @@ class CopyBulkAction
                     return;
                 }
 
-                $text = $vals->implode("\n");
-                $js = '(function(t){try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t);}else{throw 0;}}'
-                    . 'catch(e){var a=document.createElement("textarea");a.value=t;a.style.position="fixed";a.style.opacity="0";'
-                    . 'document.body.appendChild(a);a.focus();a.select();try{document.execCommand("copy");}catch(_){}document.body.removeChild(a);}})('
-                    . json_encode($text) . ')';
-                $livewire->js($js);
+                $livewire->js(self::clipboardJs($vals->implode("\n")));
 
                 Notification::make()
                     ->title($vals->count() . ' ' . $satuan . ' disalin (dari ' . $records->count() . ' baris terpilih)')

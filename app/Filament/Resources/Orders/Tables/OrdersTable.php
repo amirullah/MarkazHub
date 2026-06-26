@@ -328,6 +328,26 @@ class OrdersTable
             ->deferFilters(false)
             // Klik baris → Lihat. No. Pesanan dikecualikan (->disabledClick di kolomnya) agar bisa DISALIN, bukan navigasi.
             ->recordUrl(fn (\App\Models\Order $record): string => \App\Filament\Resources\Orders\OrderResource::getUrl('view', ['record' => $record]))
+            // Tombol header: salin SEMUA No. Pesanan hasil filter (tanpa perlu centang satu-satu).
+            ->headerActions([
+                \Filament\Actions\Action::make('salinSemuaNoPesanan')
+                    ->label('Salin semua No. Pesanan')
+                    ->icon('heroicon-o-clipboard-document')
+                    ->color('gray')
+                    ->action(function ($livewire): void {
+                        $nos = $livewire->getFilteredTableQuery()->reorder()->pluck('external_no')->filter()->unique()->values();
+                        if ($nos->isEmpty()) {
+                            \Filament\Notifications\Notification::make()->title('Tidak ada pesanan untuk disalin')->warning()->send();
+
+                            return;
+                        }
+                        $livewire->js(\App\Filament\Actions\CopyBulkAction::clipboardJs($nos->implode("\n")));
+                        \Filament\Notifications\Notification::make()
+                            ->title($nos->count() . ' No. Pesanan disalin (semua hasil filter)')
+                            ->body('Tempel (Ctrl+V) di Excel/teks — satu per baris.')
+                            ->success()->send();
+                    }),
+            ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     \App\Filament\Actions\CopyBulkAction::make('salinNoPesanan', 'Salin No. Pesanan', 'external_no', 'No. Pesanan'),
