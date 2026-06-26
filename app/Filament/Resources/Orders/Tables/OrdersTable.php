@@ -330,7 +330,7 @@ class OrdersTable
             ->recordUrl(fn (\App\Models\Order $record): string => \App\Filament\Resources\Orders\OrderResource::getUrl('view', ['record' => $record]))
             ->toolbarActions([
                 BulkActionGroup::make([
-                    \App\Filament\Actions\CopyBulkAction::make('salinNoPesanan', 'Salin No. Pesanan', 'external_no', 'No. Pesanan'),
+                    \App\Filament\Actions\CopyBulkAction::make('salinNoPesanan', 'Salin No. (terpilih)', 'external_no', 'No. Pesanan'),
                     \App\Filament\Actions\CopyBulkAction::make('salinSkuPesanan', 'Salin SKU Produk', fn ($records) => \App\Models\OrderItem::query()->whereIn('order_id', $records->pluck('id'))->pluck('sku'), 'SKU', 'Pesanan terpilih belum punya rincian produk. Impor "File Pesanan" untuk pesanan tersebut dulu agar SKU-nya tersedia.'),
                     DeleteBulkAction::make(),
                 ]),

@@ -66,7 +66,7 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 \Filament\Tables\View\TablesRenderHook::TOOLBAR_SEARCH_BEFORE,
                 fn (): string => \Illuminate\Support\Facades\Blade::render(
-                    '<x-filament::button wire:click="salinNoPesanan" wire:loading.attr="disabled" icon="heroicon-o-clipboard-document" color="gray" size="sm">Salin No. Pesanan</x-filament::button>'
+                    '<x-filament::button wire:click="salinNoPesanan" wire:loading.attr="disabled" icon="heroicon-o-clipboard-document" color="gray">Salin No. Pesanan</x-filament::button>'
                 ),
                 scopes: \App\Filament\Resources\Orders\Pages\ListOrders::class,
             )
