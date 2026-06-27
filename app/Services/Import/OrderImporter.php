@@ -457,7 +457,7 @@ class OrderImporter
             return $chosen;
         };
 
-        $created = 0; $updated = 0; $unchanged = 0; $r = fn ($v) => (int) round((float) $v);
+        $created = 0; $updated = 0; $unchanged = 0; $statusChanged = 0; $statusTerminal = 0; $r = fn ($v) => (int) round((float) $v);
 
         foreach ($prepared as $pp) {
             $ex = $pp['ex']; $exItems = $pp['exItems']; $o = $pp['o']; $no = $o['externalNo'];
@@ -505,6 +505,12 @@ class OrderImporter
             if ($status === 'CANCELLED') { $revenue = 0; $adminFee = 0; $cogs = 0; $dropship = 0; $dropshipModal = 0; $voucher = 0; $shipSeller = 0; $otherCost = 0; $otherIncome = 0; }
             if ($status === 'RETURNED') { $cogs = 0; $dropship = 0; $dropshipModal = 0; }
 
+            // Catat perubahan status pesanan lama (untuk ringkasan hasil impor).
+            if ($ex && $ex['status'] !== $status) {
+                $statusChanged++;
+                if (in_array($status, ['CANCELLED', 'RETURNED'], true)) $statusTerminal++;
+            }
+
             // Deteksi perubahan: re-import tanpa data baru = tidak diutak-atik.
             if ($ex) {
                 $exQty = 0; $exSku = 0; foreach ($exItems as $x) { $exQty += (int) $x['qty']; if (!empty($x['sku'])) $exSku++; }
@@ -548,7 +554,12 @@ class OrderImporter
             $ex ? $updated++ : $created++;
         }
 
-        return "Pesanan: $created baru, $updated diperbarui, $unchanged tetap.";
+        $msg = "Pesanan: $created baru, $updated diperbarui, $unchanged tetap.";
+        if ($statusChanged > 0) {
+            $msg .= " Status berubah: $statusChanged" . ($statusTerminal > 0 ? " ($statusTerminal jadi batal/retur — laba disesuaikan)" : '') . '.';
+        }
+
+        return $msg;
     }
 
     /** PORT order_row_to_norm: baris DB -> bentuk ternormalisasi utk mp_merge_orders. */

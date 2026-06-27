@@ -657,6 +657,27 @@ function mp_read_file(string $path, string $origName = ''): array
 // Gabungkan pesanan dari beberapa sumber berdasarkan nomor pesanan. Sumber yang
 // mengandung biaya riil (Income) menang untuk angka finansial; sumber dengan
 // item (Order Lengkap) menang untuk daftar item/SKU/qty.
+/**
+ * Gabungkan status saat re-import: MAJU & TERMINAL diterapkan; MUNDUR diabaikan
+ * (lindungi dari file lama yang diunggah belakangan). Status terminal lama (batal/retur)
+ * bersifat final — tak ditimpa. Mengembalikan status kanonik.
+ * Urutan: PENDING < PAID < SHIPPED < COMPLETED; CANCELLED/RETURNED = terminal.
+ */
+function mp_merge_status(?string $old, ?string $new): string
+{
+    $oldC = mp_map_status((string) ($old !== null && $old !== '' ? $old : 'PAID'));
+    $newRaw = trim((string) $new);
+    if ($newRaw === '') return $oldC; // tak ada info status baru → pertahankan lama
+    $newC = mp_map_status($newRaw);
+
+    $terminal = ['CANCELLED' => true, 'RETURNED' => true];
+    if (isset($terminal[$oldC])) return $oldC; // status terminal lama final, jangan ditimpa
+    if (isset($terminal[$newC])) return $newC; // batal/retur baru selalu menang
+
+    $rank = ['PENDING' => 1, 'PAID' => 2, 'SHIPPED' => 3, 'COMPLETED' => 4];
+    return ($rank[$newC] ?? 0) > ($rank[$oldC] ?? 0) ? $newC : $oldC; // hanya maju
+}
+
 function mp_merge_orders(array $sources): array
 {
     $merged = [];
@@ -685,14 +706,16 @@ function mp_merge_orders(array $sources): array
             // Finansial: sumber dengan Income menang.
             if (!empty($o['_hasIncome']) && empty($cur['_hasIncome'])) {
                 foreach (['productRevenue', 'adminFee', 'shippingCostSeller', 'voucherSellerBorne',
-                             'otherIncome', 'otherCost', 'shippingChargedToBuyer', 'status', '_hasIncome'] as $k) {
+                             'otherIncome', 'otherCost', 'shippingChargedToBuyer', '_hasIncome'] as $k) {
                     $cur[$k] = $o[$k] ?? ($cur[$k] ?? null);
                 }
             }
             // Lengkapi field yang kosong dari sumber lain.
-            foreach (['orderDate', 'buyerName', 'status'] as $k) {
+            foreach (['orderDate', 'buyerName'] as $k) {
                 if (empty($cur[$k]) && !empty($o[$k])) $cur[$k] = $o[$k];
             }
+            // Status: MAJU & TERMINAL diterapkan, MUNDUR diabaikan (lihat mp_merge_status).
+            $cur['status'] = mp_merge_status($cur['status'] ?? null, $o['status'] ?? null);
             $merged[$no] = $cur;
         }
     }
